@@ -22,6 +22,7 @@ Windows 一键 PDF 文献管理工具，面向论文、硕士/博士学位论文
 - Zotero local API 支持去重、collection key 和 PDF 附件挂载；失败时仍回退到 RIS/BibTeX
 - CLI 提供真实 PDF 样本回归报告入口，便于持续检查识别准确率
 - v0.6 起按三栏工作台重构 GUI：左侧导航、顶部扫描配置、中间文献列表、右侧复核 Inspector
+- v0.6.1 增加 AI / Zotero / OCR / Obsidian 依赖状态条，减少环境型按钮的误解
 - 优化 GUI 信息架构：扫描区、整理/复核/导入工具组、右侧当前记录详情和下一步建议
 - DOI/arXiv 与题名、作者、年份、期刊/出版社补全后自动通过，可直接重命名和导出，无需逐条复核
 - CLI 重命名计划同样使用 GB/T 7714 安全文件名，并限制长度以适配 Windows 路径

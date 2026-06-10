@@ -825,6 +825,7 @@ class App(tk.Tk):
         self._build_ui()
         self._dir_var.set(self._default_scan_dir())
         self._apply_preferences()
+        self.after(250, self._refresh_environment_status)
 
     def _init_vars(self):
         self._dir_var = tk.StringVar()
@@ -843,6 +844,10 @@ class App(tk.Tk):
         self._zotero_collection_var = tk.StringVar(value="")
         self._zotero_attach_var = tk.BooleanVar(value=True)
         self._zotero_dedupe_var = tk.BooleanVar(value=True)
+        self._env_badges: dict[str, tk.Label] = {}
+        self._env_detail_var = tk.StringVar(value="环境状态会在启动后自动检查。")
+        for var in (self._ai_env_var, self._obsidian_template_var, self._obsidian_var, self._ocr_var):
+            var.trace_add("write", lambda *_: self._refresh_environment_status(check_zotero=False))
 
     def _set_icon(self):
         ico = _resource_path("assets/pdf_manager.ico")
@@ -1059,8 +1064,28 @@ class App(tk.Tk):
         ttk.Label(zotero_opts, text="OCR 语言", style="Muted.TLabel").grid(row=0, column=4, sticky="w")
         ttk.Entry(zotero_opts, textvariable=self._ocr_lang_var, width=12).grid(row=0, column=5, sticky="e", padx=(6, 0))
 
+        env = ttk.Frame(shell, style="Surface.TFrame")
+        env.grid(row=6, column=0, columnspan=4, sticky="ew", pady=(12, 0))
+        env.columnconfigure(4, weight=1)
+        ttk.Label(env, text="依赖状态", style="Muted.TLabel").grid(row=0, column=0, sticky="w", padx=(0, 8))
+        for idx, key in enumerate(("ai", "zotero", "ocr", "obsidian"), start=1):
+            self._env_badges[key] = tk.Label(
+                env,
+                text="检查中",
+                bg=PALETTE["surface_alt"],
+                fg=PALETTE["muted"],
+                padx=10,
+                pady=4,
+                font=("Microsoft YaHei UI", 8),
+            )
+            self._env_badges[key].grid(row=0, column=idx, sticky="w", padx=(0, 6))
+        ttk.Label(env, textvariable=self._env_detail_var, style="Muted.TLabel").grid(
+            row=0, column=5, sticky="e", padx=(12, 8)
+        )
+        ttk.Button(env, text="刷新状态", command=self._refresh_environment_status).grid(row=0, column=6, sticky="e")
+
         self._progress = ttk.Progressbar(shell, mode="determinate")
-        self._progress.grid(row=6, column=0, columnspan=4, sticky="ew", pady=(12, 0))
+        self._progress.grid(row=7, column=0, columnspan=4, sticky="ew", pady=(12, 0))
 
     def _build_kpi_strip(self):
         strip = ttk.Frame(self._main, style="Main.TFrame")
@@ -1317,6 +1342,104 @@ class App(tk.Tk):
             "zotero_dedupe": self._zotero_dedupe_var.get(),
         }
 
+    def _set_env_badge(self, key: str, text: str, state: str):
+        label = self._env_badges.get(key)
+        if not label:
+            return
+        colors = {
+            "ok": (PALETTE["soft_green"], "#087443"),
+            "warn": (PALETTE["soft_orange"], "#9a5b00"),
+            "off": (PALETTE["surface_alt"], PALETTE["muted"]),
+            "bad": ("#fff1f1", PALETTE["danger"]),
+        }
+        bg, fg = colors.get(state, colors["off"])
+        label.configure(text=text, bg=bg, fg=fg)
+
+    def _refresh_environment_status(self, *, check_zotero: bool = True):
+        details = []
+        env_name = (self._ai_env_var.get() or "OPENAI_API_KEY").strip()
+        if os.environ.get(env_name, "").strip():
+            self._set_env_badge("ai", "AI 已配置", "ok")
+            details.append(f"AI: {env_name} 可用")
+        else:
+            self._set_env_badge("ai", "AI 未配置", "warn")
+            details.append(f"AI: 缺少 {env_name}")
+
+        try:
+            from pdf_manager import ocr
+
+            engine = ocr.best_engine()
+            if self._ocr_var.get() and engine:
+                self._set_env_badge("ocr", f"OCR {engine}", "ok")
+                details.append(f"OCR: {engine}")
+            elif self._ocr_var.get():
+                self._set_env_badge("ocr", "OCR 未安装", "warn")
+                details.append("OCR: 未检测到引擎")
+            else:
+                self._set_env_badge("ocr", "OCR 关闭", "off")
+                details.append("OCR: 已关闭")
+        except Exception:
+            self._set_env_badge("ocr", "OCR 异常", "bad")
+            details.append("OCR: 状态读取失败")
+
+        if self._obsidian_var.get():
+            template = self._obsidian_template_var.get().strip()
+            if template and not Path(template).exists():
+                self._set_env_badge("obsidian", "模板缺失", "warn")
+                details.append("Obsidian: 模板路径不存在")
+            else:
+                self._set_env_badge("obsidian", "Obsidian 就绪", "ok")
+                details.append("Obsidian: 可生成笔记")
+        else:
+            self._set_env_badge("obsidian", "Obsidian 关闭", "off")
+            details.append("Obsidian: 已关闭")
+
+        if check_zotero:
+            self._set_env_badge("zotero", "Zotero 检查中", "off")
+            threading.Thread(target=self._check_zotero_status, daemon=True).start()
+
+        self._env_detail_var.set(" · ".join(details[:3]))
+
+    def _check_zotero_status(self):
+        try:
+            from pdf_manager import zotero_api
+
+            ok = zotero_api.is_available(timeout=0.8)
+        except Exception:
+            ok = False
+
+        def apply():
+            self._set_env_badge("zotero", "Zotero 已连接" if ok else "Zotero 未连接", "ok" if ok else "warn")
+
+        try:
+            self.after(0, apply)
+        except tk.TclError:
+            pass
+
+    def _warn_missing_ai_key(self) -> bool:
+        env_name = (self._ai_env_var.get() or "OPENAI_API_KEY").strip()
+        if os.environ.get(env_name, "").strip():
+            return True
+        return messagebox.askyesno(
+            "AI 未配置",
+            f"未检测到环境变量 {env_name}。\n\n仍可继续，系统会让你输入一次性 API Key；该 Key 不会保存到配置或上传到仓库。\n是否继续？",
+        )
+
+    def _warn_ocr_unavailable(self) -> bool:
+        if not self._ocr_var.get():
+            return True
+        try:
+            from pdf_manager import ocr
+
+            if ocr.best_engine():
+                return True
+        except Exception:
+            pass
+        return messagebox.askyesno(
+            "OCR 未安装",
+            "当前未检测到 tesseract / paddleocr / easyocr。\n\n仍可扫描文本型 PDF；扫描版 PDF 的识别可能不完整。是否继续？",
+        )
+
     def _browse_obsidian_template(self):
         selected = filedialog.askopenfilename(
             title="选择 Obsidian 笔记模板",
@@ -1329,6 +1452,8 @@ class App(tk.Tk):
         scan_dir = self._dir_var.get().strip()
         if not scan_dir or not Path(scan_dir).is_dir():
             messagebox.showerror("路径无效", "请选择一个有效文件夹。")
+            return
+        if not self._warn_ocr_unavailable():
             return
         if self._scanning:
             return
@@ -1577,6 +1702,8 @@ class App(tk.Tk):
         if not selected:
             messagebox.showinfo("未选择文献", "请先选择一条需要粗读/精读的记录。")
             return
+        if not self._warn_missing_ai_key():
+            return
         _item, rec = selected
         if rec.get("detected_type") not in {"paper", "thesis"}:
             if not messagebox.askyesno("非文献记录", "当前记录不是 paper/thesis，仍要生成 AI 阅读笔记吗？"):
@@ -1656,6 +1783,8 @@ class App(tk.Tk):
         scan_dir = self._dir_var.get().strip()
         if not scan_dir:
             messagebox.showinfo("未选择文件夹", "请先选择扫描文件夹。")
+            return
+        if not self._warn_missing_ai_key():
             return
         if not messagebox.askyesno(
             "确认批量调用 AI",
@@ -1792,6 +1921,7 @@ class App(tk.Tk):
         out = self._write_current_export()
         if not out:
             return
+        self._refresh_environment_status()
         try:
             from pdf_manager import zotero_api
 
