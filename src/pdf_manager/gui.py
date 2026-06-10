@@ -35,13 +35,28 @@ COL_LABELS = {
 }
 COL_WIDTHS = {
     "select": 42,
-    "filename": 220,
-    "type": 86,
+    "filename": 210,
+    "type": 82,
     "confidence": 72,
-    "title": 330,
+    "title": 300,
     "year": 62,
-    "doi": 170,
-    "newname": 260,
+    "doi": 150,
+    "newname": 250,
+}
+
+PALETTE = {
+    "app": "#eef2f6",
+    "surface": "#ffffff",
+    "surface_alt": "#f7f9fc",
+    "line": "#d9e2ec",
+    "ink": "#182230",
+    "muted": "#667085",
+    "primary": "#2563eb",
+    "primary_dark": "#1d4ed8",
+    "accent": "#0f766e",
+    "danger": "#b42318",
+    "hero": "#102033",
+    "hero_2": "#18324f",
 }
 
 
@@ -587,11 +602,11 @@ class AIReadingDialog(tk.Toplevel):
         self._base_url_var = tk.StringVar(value="https://api.openai.com/v1")
         self._env_var = tk.StringVar(value="OPENAI_API_KEY")
         self._temp_key_var = tk.StringVar(value="")
-        self._status_var = tk.StringVar(value="密钥不会写入配置、日志、报告或 GitHub；留空则读取环境变量。")
+        self._status_var = tk.StringVar(value="API Key 只在本次运行中读取，不会保存到配置、笔记、日志或 GitHub。")
         self._build()
 
     def _build(self):
-        root = ttk.Frame(self, padding=14)
+        root = ttk.Frame(self, style="Dialog.TFrame", padding=18)
         root.grid(row=0, column=0, sticky="nsew")
         self.columnconfigure(0, weight=1)
         self.rowconfigure(0, weight=1)
@@ -599,12 +614,12 @@ class AIReadingDialog(tk.Toplevel):
         root.rowconfigure(7, weight=1)
 
         title = self._rec.get("title") or self._rec.get("original_filename") or "Untitled"
-        ttk.Label(root, text="AI 阅读", style="Section.TLabel").grid(row=0, column=0, columnspan=2, sticky="w")
-        ttk.Label(root, text=title, wraplength=590, style="Muted.TLabel").grid(
+        ttk.Label(root, text="AI 粗读 / 精读", style="DialogTitle.TLabel").grid(row=0, column=0, columnspan=2, sticky="w")
+        ttk.Label(root, text=title, wraplength=590, style="DialogMuted.TLabel").grid(
             row=1, column=0, columnspan=2, sticky="ew", pady=(4, 12)
         )
 
-        mode_box = ttk.Frame(root)
+        mode_box = ttk.LabelFrame(root, text="阅读模式", padding=(12, 8))
         mode_box.grid(row=2, column=0, columnspan=2, sticky="w", pady=4)
         ttk.Radiobutton(mode_box, text="粗读筛选", variable=self._mode_var, value="rough").pack(side=tk.LEFT)
         ttk.Radiobutton(mode_box, text="精读笔记", variable=self._mode_var, value="deep").pack(side=tk.LEFT, padx=(16, 0))
@@ -614,21 +629,21 @@ class AIReadingDialog(tk.Toplevel):
             ("Base URL", self._base_url_var),
             ("环境变量", self._env_var),
         ), start=3):
-            ttk.Label(root, text=label).grid(row=row, column=0, sticky="w", pady=4)
+            ttk.Label(root, text=label, style="DialogLabel.TLabel").grid(row=row, column=0, sticky="w", pady=4)
             ttk.Entry(root, textvariable=var).grid(row=row, column=1, sticky="ew", pady=4)
 
-        ttk.Label(root, text="临时 API Key").grid(row=6, column=0, sticky="nw", pady=4)
-        key_frame = ttk.Frame(root)
+        ttk.Label(root, text="临时 API Key", style="DialogLabel.TLabel").grid(row=6, column=0, sticky="nw", pady=4)
+        key_frame = ttk.Frame(root, style="Dialog.TFrame")
         key_frame.grid(row=6, column=1, sticky="new", pady=4)
         key_frame.columnconfigure(0, weight=1)
         ttk.Entry(key_frame, textvariable=self._temp_key_var, show="*").grid(row=0, column=0, sticky="ew")
         ttk.Label(
             key_frame,
             text="可留空；若填写，仅本次运行内存使用，不保存。",
-            style="Muted.TLabel",
+            style="DialogMuted.TLabel",
         ).grid(row=1, column=0, sticky="w", pady=(3, 0))
 
-        ttk.Label(root, text="阅读偏好").grid(row=7, column=0, sticky="nw", pady=4)
+        ttk.Label(root, text="阅读偏好", style="DialogLabel.TLabel").grid(row=7, column=0, sticky="nw", pady=4)
         self._preference = tk.Text(root, height=7, wrap=tk.WORD, font=("Microsoft YaHei UI", 9))
         self._preference.grid(row=7, column=1, sticky="nsew", pady=4)
         self._preference.insert(
@@ -636,10 +651,10 @@ class AIReadingDialog(tk.Toplevel):
             "偏好：航天动力学、小推力轨迹优化、最优控制、RTBP、ADRC；优先判断是否值得精读和引用。",
         )
 
-        ttk.Label(root, textvariable=self._status_var, style="Muted.TLabel").grid(
+        ttk.Label(root, textvariable=self._status_var, style="DialogMuted.TLabel").grid(
             row=8, column=0, columnspan=2, sticky="ew", pady=(8, 0)
         )
-        buttons = ttk.Frame(root)
+        buttons = ttk.Frame(root, style="Dialog.TFrame")
         buttons.grid(row=9, column=0, columnspan=2, sticky="e", pady=(12, 0))
         self._run_btn = ttk.Button(buttons, text="生成阅读笔记", style="Primary.TButton", command=self._run)
         self._run_btn.pack(side=tk.LEFT, padx=(0, 8))
@@ -778,7 +793,7 @@ class App(tk.Tk):
         self.title(APP_TITLE)
         self.geometry("1240x780")
         self.minsize(1080, 680)
-        self.configure(bg="#f3f6fb")
+        self.configure(bg=PALETTE["app"])
 
         self._records: list[dict] = []
         self._q: queue.Queue = queue.Queue()
@@ -809,27 +824,36 @@ class App(tk.Tk):
         except tk.TclError:
             pass
         style.configure(".", font=("Microsoft YaHei UI", 9))
-        style.configure("TFrame", background="#f3f6fb")
-        style.configure("Surface.TFrame", background="#ffffff")
-        style.configure("Hero.TFrame", background="#152238")
-        style.configure("HeroTitle.TLabel", background="#152238", foreground="#ffffff",
-                        font=("Microsoft YaHei UI", 20, "bold"))
-        style.configure("HeroText.TLabel", background="#152238", foreground="#cbd7ea")
-        style.configure("Section.TLabel", background="#ffffff", foreground="#1d2939",
+        style.configure("TFrame", background=PALETTE["app"])
+        style.configure("Surface.TFrame", background=PALETTE["surface"])
+        style.configure("Subtle.TFrame", background=PALETTE["surface_alt"])
+        style.configure("Dialog.TFrame", background=PALETTE["surface"])
+        style.configure("Hero.TFrame", background=PALETTE["hero"])
+        style.configure("HeroTitle.TLabel", background=PALETTE["hero"], foreground="#ffffff",
+                        font=("Microsoft YaHei UI", 18, "bold"))
+        style.configure("HeroText.TLabel", background=PALETTE["hero"], foreground="#d6e2f0")
+        style.configure("Section.TLabel", background=PALETTE["surface"], foreground=PALETTE["ink"],
                         font=("Microsoft YaHei UI", 10, "bold"))
-        style.configure("Muted.TLabel", background="#ffffff", foreground="#667085")
-        style.configure("Status.TLabel", background="#f3f6fb", foreground="#42526e")
+        style.configure("PanelTitle.TLabel", background=PALETTE["surface_alt"], foreground=PALETTE["ink"],
+                        font=("Microsoft YaHei UI", 10, "bold"))
+        style.configure("Muted.TLabel", background=PALETTE["surface"], foreground=PALETTE["muted"])
+        style.configure("SubtleMuted.TLabel", background=PALETTE["surface_alt"], foreground=PALETTE["muted"])
+        style.configure("DialogTitle.TLabel", background=PALETTE["surface"], foreground=PALETTE["ink"],
+                        font=("Microsoft YaHei UI", 14, "bold"))
+        style.configure("DialogLabel.TLabel", background=PALETTE["surface"], foreground=PALETTE["ink"])
+        style.configure("DialogMuted.TLabel", background=PALETTE["surface"], foreground=PALETTE["muted"])
+        style.configure("Status.TLabel", background=PALETTE["app"], foreground="#42526e")
         style.configure("Primary.TButton", font=("Microsoft YaHei UI", 10, "bold"), padding=(14, 7))
         style.configure("Accent.TButton", font=("Microsoft YaHei UI", 9, "bold"), padding=(10, 6))
         style.configure("Danger.TButton", font=("Microsoft YaHei UI", 9, "bold"), padding=(10, 6))
         style.configure("TButton", padding=(10, 6))
         style.configure("Toolbutton.TButton", padding=(8, 5))
-        style.configure("Treeview", rowheight=32, fieldbackground="#ffffff", background="#ffffff",
-                        foreground="#1d2939", borderwidth=0)
-        style.configure("Treeview.Heading", background="#f5f7fb", foreground="#344054",
+        style.configure("Treeview", rowheight=30, fieldbackground=PALETTE["surface"], background=PALETTE["surface"],
+                        foreground=PALETTE["ink"], borderwidth=0)
+        style.configure("Treeview.Heading", background=PALETTE["surface_alt"], foreground="#344054",
                         font=("Microsoft YaHei UI", 9, "bold"), relief=tk.FLAT)
-        style.map("Treeview", background=[("selected", "#cfe8ff")], foreground=[("selected", "#0f172a")])
-        style.configure("Horizontal.TProgressbar", troughcolor="#dde5ef", background="#2f80ed")
+        style.map("Treeview", background=[("selected", "#dbeafe")], foreground=[("selected", "#0f172a")])
+        style.configure("Horizontal.TProgressbar", troughcolor="#dde5ef", background=PALETTE["primary"])
 
     def _build_ui(self):
         self.columnconfigure(0, weight=1)
@@ -840,21 +864,21 @@ class App(tk.Tk):
         self._build_footer()
 
     def _build_header(self):
-        header = ttk.Frame(self, style="Hero.TFrame", padding=(18, 16))
+        header = ttk.Frame(self, style="Hero.TFrame", padding=(18, 14))
         header.grid(row=0, column=0, sticky="ew")
         header.columnconfigure(1, weight=1)
-        mark = tk.Canvas(header, width=56, height=56, bg="#152238", bd=0, highlightthickness=0)
+        mark = tk.Canvas(header, width=52, height=52, bg=PALETTE["hero"], bd=0, highlightthickness=0)
         mark.grid(row=0, column=0, rowspan=2, sticky="w", padx=(0, 14))
-        mark.create_oval(2, 2, 54, 54, fill="#2f80ed", outline="")
+        mark.create_oval(2, 2, 50, 50, fill=PALETTE["primary"], outline="")
         mark.create_rectangle(18, 12, 39, 44, fill="#ffffff", outline="")
         mark.create_polygon(32, 12, 39, 19, 32, 19, fill="#d9e9ff", outline="")
         mark.create_text(28, 29, text="PDF", fill="#d92d20", font=("Segoe UI", 8, "bold"))
-        mark.create_line(20, 37, 36, 37, fill="#2f80ed", width=2)
+        mark.create_line(20, 37, 36, 37, fill=PALETTE["primary"], width=2)
 
         ttk.Label(header, text=APP_TITLE, style="HeroTitle.TLabel").grid(row=0, column=1, sticky="w")
         ttk.Label(
             header,
-            text="国标命名、硕博论文识别、BibTeX/RIS、Obsidian 笔记和第三方文献软件导入。",
+            text="扫描、复核、国标命名、Zotero / Obsidian 导出和 AI 阅读笔记。",
             style="HeroText.TLabel",
         ).grid(row=1, column=1, sticky="w", pady=(4, 0))
 
@@ -867,11 +891,11 @@ class App(tk.Tk):
         summary = ttk.Frame(header, style="Hero.TFrame")
         summary.grid(row=0, column=2, rowspan=2, sticky="e")
         for idx, (key, label) in enumerate((("all", "总数"), ("paper", "论文"), ("review", "复核"), ("error", "失败"))):
-            box = tk.Frame(summary, bg="#22304a", padx=12, pady=8)
+            box = tk.Frame(summary, bg=PALETTE["hero_2"], padx=12, pady=7)
             box.grid(row=0, column=idx, padx=(8, 0), sticky="e")
-            tk.Label(box, textvariable=self._summary_vars[key], bg="#22304a", fg="#ffffff",
+            tk.Label(box, textvariable=self._summary_vars[key], bg=PALETTE["hero_2"], fg="#ffffff",
                      font=("Microsoft YaHei UI", 12, "bold"), justify=tk.CENTER).pack()
-            tk.Label(box, text=label, bg="#22304a", fg="#aab7cf", font=("Microsoft YaHei UI", 8)).pack()
+            tk.Label(box, text=label, bg=PALETTE["hero_2"], fg="#b9c6d8", font=("Microsoft YaHei UI", 8)).pack()
 
     def _build_toolbar(self):
         shell = ttk.Frame(self, style="Surface.TFrame", padding=(14, 12))
@@ -898,7 +922,7 @@ class App(tk.Tk):
         ttk.Checkbutton(options, text="生成 Obsidian 文献笔记", variable=self._obsidian_var).pack(side=tk.LEFT, padx=(18, 0))
         ttk.Label(options, text="引用风格", style="Muted.TLabel").pack(side=tk.LEFT, padx=(18, 6))
         ttk.Combobox(options, textvariable=self._style_var, values=list(STYLE_OPTIONS), state="readonly", width=12).pack(side=tk.LEFT)
-        ttk.Label(options, text="默认按 GB/T 7714 引用格式命名，待复核项不会被静默当作论文处理。", style="Muted.TLabel").pack(side=tk.RIGHT)
+        ttk.Label(options, text="默认按 GB/T 7714 命名；待复核项不会静默进入 Zotero。", style="Muted.TLabel").pack(side=tk.RIGHT)
 
         obsidian_opts = ttk.Frame(shell, style="Surface.TFrame")
         obsidian_opts.grid(row=3, column=0, columnspan=4, sticky="ew", pady=(10, 0))
@@ -917,6 +941,7 @@ class App(tk.Tk):
         body.grid(row=2, column=0, sticky="nsew", padx=14)
         body.rowconfigure(2, weight=1)
         body.columnconfigure(0, weight=1)
+        body.columnconfigure(1, minsize=270)
 
         top = ttk.Frame(body, style="Surface.TFrame")
         top.grid(row=0, column=0, sticky="ew", pady=(0, 8))
@@ -928,7 +953,7 @@ class App(tk.Tk):
         buttons = [
             ("全选", self._select_all, "Toolbutton.TButton"),
             ("反选", self._invert_sel, "Toolbutton.TButton"),
-            ("复核 / 编辑", self._open_review_dialog, "Accent.TButton"),
+            ("复核编辑", self._open_review_dialog, "Accent.TButton"),
             ("加载上次结果", self._load_session, "Toolbutton.TButton"),
             ("导出索引 / 引用", self._export, "Primary.TButton"),
         ]
@@ -939,21 +964,34 @@ class App(tk.Tk):
 
         secondary = ttk.Frame(body, style="Surface.TFrame")
         secondary.grid(row=1, column=0, sticky="ew", pady=(0, 10))
-        ttk.Label(secondary, text="快捷操作", style="Muted.TLabel").pack(side=tk.LEFT)
-        secondary_buttons = [
-            ("重命名计划", self._write_rename_plan, "Toolbutton.TButton"),
-            ("应用重命名", self._apply_rename, "Danger.TButton"),
-            ("撤销重命名", self._undo_rename, "Toolbutton.TButton"),
-            ("批量复核", self._open_batch_review_dialog, "Toolbutton.TButton"),
-            ("重复合并", self._open_duplicate_dialog, "Toolbutton.TButton"),
-            ("AI 阅读", self._open_ai_reading_dialog, "Accent.TButton"),
-            ("打开输出目录", self._open_output, "Toolbutton.TButton"),
-            ("Zotero 检查", self._open_zotero_review_dialog, "Toolbutton.TButton"),
-            ("导入 Zotero", self._import_zotero, "Toolbutton.TButton"),
-            ("导入 Obsidian", self._import_obsidian, "Toolbutton.TButton"),
-        ]
-        for text, command, btn_style in secondary_buttons:
-            ttk.Button(secondary, text=text, style=btn_style, command=command).pack(side=tk.LEFT, padx=(8, 0))
+        self._button_group(
+            secondary,
+            "整理",
+            [
+                ("重命名计划", self._write_rename_plan, "Toolbutton.TButton"),
+                ("应用重命名", self._apply_rename, "Danger.TButton"),
+                ("撤销", self._undo_rename, "Toolbutton.TButton"),
+            ],
+        ).pack(side=tk.LEFT, padx=(0, 14))
+        self._button_group(
+            secondary,
+            "复核",
+            [
+                ("批量复核", self._open_batch_review_dialog, "Toolbutton.TButton"),
+                ("重复合并", self._open_duplicate_dialog, "Toolbutton.TButton"),
+                ("AI 阅读", self._open_ai_reading_dialog, "Accent.TButton"),
+            ],
+        ).pack(side=tk.LEFT, padx=(0, 14))
+        self._button_group(
+            secondary,
+            "导入",
+            [
+                ("Zotero 检查", self._open_zotero_review_dialog, "Toolbutton.TButton"),
+                ("导入 Zotero", self._import_zotero, "Toolbutton.TButton"),
+                ("导入 Obsidian", self._import_obsidian, "Toolbutton.TButton"),
+                ("输出目录", self._open_output, "Toolbutton.TButton"),
+            ],
+        ).pack(side=tk.LEFT)
 
         table_frame = ttk.Frame(body, style="Surface.TFrame")
         table_frame.grid(row=2, column=0, sticky="nsew")
@@ -975,11 +1013,48 @@ class App(tk.Tk):
         self._tree.bind("<Button-1>", self._on_click_select)
         self._tree.bind("<Double-1>", self._maybe_open_review)
         self._tree.bind("<<TreeviewSelect>>", lambda _e: self._update_detail())
-        self._tree.tag_configure("paper", background="#edf8f1")
+        self._tree.tag_configure("paper", background="#eef8f2")
         self._tree.tag_configure("thesis", background="#eef4ff")
         self._tree.tag_configure("document", background="#ffffff")
-        self._tree.tag_configure("unknown", background="#fff7df")
-        self._tree.tag_configure("error", background="#fdecec")
+        self._tree.tag_configure("unknown", background="#fff8e6")
+        self._tree.tag_configure("error", background="#fff1f1")
+        self._build_detail_panel(body)
+
+    def _button_group(self, master, label: str, buttons: list[tuple[str, object, str]]) -> ttk.Frame:
+        group = ttk.Frame(master, style="Surface.TFrame")
+        ttk.Label(group, text=label, style="Muted.TLabel").pack(side=tk.LEFT, padx=(0, 6))
+        for text, command, btn_style in buttons:
+            ttk.Button(group, text=text, style=btn_style, command=command).pack(side=tk.LEFT, padx=(0, 5))
+        return group
+
+    def _build_detail_panel(self, body):
+        panel = ttk.Frame(body, style="Subtle.TFrame", padding=(12, 12))
+        panel.grid(row=0, column=1, rowspan=3, sticky="nsew", padx=(12, 0))
+        panel.columnconfigure(0, weight=1)
+        ttk.Label(panel, text="当前记录", style="PanelTitle.TLabel").grid(row=0, column=0, sticky="w")
+        self._detail_title_var = tk.StringVar(value="尚未选择")
+        self._detail_meta_var = tk.StringVar(value="选择一条记录后查看作者、DOI、复核原因。")
+        self._detail_hint_var = tk.StringVar(value="建议流程：扫描 -> 批量复核 -> 导出 Zotero / Obsidian。")
+        ttk.Label(panel, textvariable=self._detail_title_var, style="PanelTitle.TLabel", wraplength=235).grid(
+            row=1, column=0, sticky="ew", pady=(14, 6)
+        )
+        ttk.Label(panel, textvariable=self._detail_meta_var, style="SubtleMuted.TLabel", wraplength=235).grid(
+            row=2, column=0, sticky="ew"
+        )
+        ttk.Separator(panel).grid(row=3, column=0, sticky="ew", pady=12)
+        ttk.Label(panel, text="常用下一步", style="PanelTitle.TLabel").grid(row=4, column=0, sticky="w")
+        ttk.Button(panel, text="复核编辑", style="Accent.TButton", command=self._open_review_dialog).grid(
+            row=5, column=0, sticky="ew", pady=(8, 4)
+        )
+        ttk.Button(panel, text="AI 粗读 / 精读", style="Accent.TButton", command=self._open_ai_reading_dialog).grid(
+            row=6, column=0, sticky="ew", pady=4
+        )
+        ttk.Button(panel, text="Zotero 导出检查", command=self._open_zotero_review_dialog).grid(
+            row=7, column=0, sticky="ew", pady=4
+        )
+        ttk.Label(panel, textvariable=self._detail_hint_var, style="SubtleMuted.TLabel", wraplength=235).grid(
+            row=8, column=0, sticky="ew", pady=(14, 0)
+        )
 
     def _build_footer(self):
         footer = ttk.Frame(self, padding=(14, 10))
@@ -1199,6 +1274,9 @@ class App(tk.Tk):
         for item in self._tree.get_children():
             self._tree.delete(item)
         self._update_summary()
+        self._detail_title_var.set("尚未选择")
+        self._detail_meta_var.set("选择一条记录后查看作者、DOI、复核原因。")
+        self._detail_hint_var.set("建议流程：扫描 -> 批量复核 -> 导出 Zotero / Obsidian。")
 
     def _on_click_select(self, event):
         if self._tree.identify_region(event.x, event.y) != "cell" or self._tree.identify_column(event.x) != "#1":
@@ -1532,6 +1610,24 @@ class App(tk.Tk):
         reason = rec.get("classification_reason") or "无识别理由"
         error = f"；错误：{rec['error']}" if rec.get("error") else ""
         self._detail_var.set(f"{_status_label(rec)} | {authors} | {identity} | {review} | {reason}{error}")
+        title = rec.get("title") or rec.get("tag") or rec.get("original_filename") or "Untitled"
+        self._detail_title_var.set(title[:120])
+        meta = [
+            _status_label(rec),
+            authors,
+            identity,
+            f"年份：{rec.get('year') or '未知'}",
+        ]
+        self._detail_meta_var.set("\n".join(meta))
+        if rec.get("error"):
+            hint = f"处理失败：{rec.get('error')}"
+        elif rec.get("needs_review") or rec.get("detected_type") == "unknown":
+            hint = f"需要复核：{reason}"
+        elif rec.get("detected_type") in {"paper", "thesis"}:
+            hint = "可直接导出 Zotero / Obsidian；如需快速判断价值，可生成 AI 阅读笔记。"
+        else:
+            hint = "普通 PDF 默认不进入 Zotero；可改为 paper/thesis 后重新导出。"
+        self._detail_hint_var.set(hint[:220])
 
     def _update_summary(self):
         total = len(self._records)

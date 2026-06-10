@@ -14,6 +14,7 @@ Windows 一键 PDF 文献管理工具，面向论文、硕士/博士学位论文
 - 支持 Zotero 等文献管理软件导入 BibTeX/RIS，并生成 Zotero 导入遗漏报告
 - 提供 Zotero 导出检查 / 待复核面板，可按 skipped、unknown、document、needs_review、缺 DOI、缺作者筛选并批量修正
 - 提供可选 AI 粗读 / 精读，支持 OpenAI-compatible API、可编辑模型名和 Base URL，API Key 仅从环境变量或本机临时输入读取
+- 优化 GUI 信息架构：扫描区、整理/复核/导入工具组、右侧当前记录详情和下一步建议
 - 支持批量复核、重复文献合并标记、重命名日志和撤销重命名
 - 增强中文学位论文元数据提取：题名、作者、导师、学校、地点、年份
 - 提供 GUI 和 CLI 两种使用方式
