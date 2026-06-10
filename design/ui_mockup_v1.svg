@@ -1,0 +1,162 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1536" height="1024" viewBox="0 0 1536 1024">
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="14" flood-color="#101828" flood-opacity="0.10"/>
+    </filter>
+    <style>
+      .bg{fill:#f4f7fb}
+      .surface{fill:#ffffff}
+      .soft{fill:#f8fafc}
+      .line{stroke:#d9e2ec;stroke-width:1}
+      .ink{fill:#162033;font-family:"Microsoft YaHei UI","Segoe UI",Arial,sans-serif}
+      .muted{fill:#667085;font-family:"Microsoft YaHei UI","Segoe UI",Arial,sans-serif}
+      .tiny{font-size:18px}
+      .small{font-size:20px}
+      .body{font-size:22px}
+      .title{font-size:32px;font-weight:700}
+      .section{font-size:20px;font-weight:700}
+      .button{rx:8;ry:8}
+      .pill{rx:18;ry:18}
+      .mono{font-family:"Consolas","Segoe UI",monospace}
+    </style>
+  </defs>
+
+  <rect class="bg" width="1536" height="1024"/>
+
+  <!-- Top app shell -->
+  <rect x="28" y="24" width="1480" height="92" rx="14" fill="#111827"/>
+  <circle cx="78" cy="70" r="26" fill="#1f6feb"/>
+  <rect x="67" y="54" width="25" height="33" rx="2" fill="#fff"/>
+  <path d="M84 54 L92 62 L84 62 Z" fill="#dbeafe"/>
+  <text x="62" y="100" class="tiny" fill="#cfe1ff">PDF</text>
+  <text x="124" y="65" class="title" fill="#fff">PDF 文献管理器</text>
+  <text x="124" y="96" class="small" fill="#c7d2e5">扫描、国标命名、Zotero / Obsidian 导出、AI 粗读与复核工作台</text>
+
+  <!-- summary boxes -->
+  <g transform="translate(1068 43)">
+    <rect width="92" height="54" rx="10" fill="#243042"/>
+    <text x="46" y="25" text-anchor="middle" class="section" fill="#fff">128</text>
+    <text x="46" y="45" text-anchor="middle" class="tiny" fill="#aebacf">PDF</text>
+    <rect x="104" width="92" height="54" rx="10" fill="#243042"/>
+    <text x="150" y="25" text-anchor="middle" class="section" fill="#fff">96</text>
+    <text x="150" y="45" text-anchor="middle" class="tiny" fill="#aebacf">论文</text>
+    <rect x="208" width="92" height="54" rx="10" fill="#3a2f15"/>
+    <text x="254" y="25" text-anchor="middle" class="section" fill="#fff">11</text>
+    <text x="254" y="45" text-anchor="middle" class="tiny" fill="#f4d492">复核</text>
+    <rect x="312" width="92" height="54" rx="10" fill="#3b1f24"/>
+    <text x="358" y="25" text-anchor="middle" class="section" fill="#fff">2</text>
+    <text x="358" y="45" text-anchor="middle" class="tiny" fill="#ffc9c9">失败</text>
+  </g>
+
+  <!-- Scan command panel -->
+  <rect x="28" y="136" width="1480" height="174" rx="14" class="surface" filter="url(#shadow)"/>
+  <text x="56" y="177" class="section ink">扫描与配置</text>
+  <rect x="56" y="196" width="860" height="42" rx="8" fill="#f8fafc" stroke="#d9e2ec"/>
+  <text x="76" y="224" class="small muted">F:\Research\PDFs\trajectory_optimization</text>
+  <rect x="930" y="196" width="124" height="42" class="button" fill="#eef4ff" stroke="#bdd4ff"/>
+  <text x="992" y="224" text-anchor="middle" class="small" fill="#1f6feb">选择文件夹</text>
+  <rect x="1068" y="196" width="132" height="42" class="button" fill="#1f6feb"/>
+  <text x="1134" y="224" text-anchor="middle" class="small" fill="#fff">开始扫描</text>
+  <rect x="1216" y="196" width="118" height="42" class="button" fill="#f8fafc" stroke="#d9e2ec"/>
+  <text x="1275" y="224" text-anchor="middle" class="small muted">GB/T 7714</text>
+  <rect x="1350" y="196" width="130" height="42" class="button" fill="#ecfdf3" stroke="#b7ead0"/>
+  <text x="1415" y="224" text-anchor="middle" class="small" fill="#087443">OCR 兜底</text>
+
+  <g transform="translate(56 258)">
+    <rect width="120" height="28" class="pill" fill="#f1f5f9"/><text x="60" y="20" text-anchor="middle" class="tiny muted">递归子目录</text>
+    <rect x="134" width="164" height="28" class="pill" fill="#f1f5f9"/><text x="216" y="20" text-anchor="middle" class="tiny muted">联网补全 DOI/arXiv</text>
+    <rect x="312" width="186" height="28" class="pill" fill="#f1f5f9"/><text x="405" y="20" text-anchor="middle" class="tiny muted">Obsidian 02_literature</text>
+    <rect x="512" width="172" height="28" class="pill" fill="#f1f5f9"/><text x="598" y="20" text-anchor="middle" class="tiny muted">AI: gpt-5.4</text>
+    <rect x="698" width="236" height="28" class="pill" fill="#f1f5f9"/><text x="816" y="20" text-anchor="middle" class="tiny muted">Zotero Collection: low-thrust</text>
+    <rect x="948" width="134" height="28" class="pill" fill="#f1f5f9"/><text x="1015" y="20" text-anchor="middle" class="tiny muted">挂载 PDF</text>
+  </g>
+
+  <!-- Main table -->
+  <rect x="28" y="330" width="1072" height="604" rx="14" class="surface" filter="url(#shadow)"/>
+  <text x="56" y="370" class="section ink">扫描结果</text>
+  <text x="176" y="370" class="tiny muted">双击可复核；建议文件名可直接编辑</text>
+  <rect x="820" y="344" width="86" height="34" class="button" fill="#f8fafc" stroke="#d9e2ec"/><text x="863" y="367" text-anchor="middle" class="tiny muted">全选</text>
+  <rect x="916" y="344" width="118" height="34" class="button" fill="#0f766e"/><text x="975" y="367" text-anchor="middle" class="tiny" fill="#fff">复核编辑</text>
+  <rect x="1044" y="344" width="36" height="34" class="button" fill="#1f6feb"/><text x="1062" y="367" text-anchor="middle" class="tiny" fill="#fff">导出</text>
+
+  <!-- grouped actions -->
+  <g transform="translate(56 394)">
+    <rect width="480" height="44" rx="10" fill="#f8fafc" stroke="#d9e2ec"/>
+    <text x="18" y="29" class="tiny muted" font-weight="700">整理</text>
+    <rect x="72" y="8" width="92" height="28" class="button" fill="#fff" stroke="#d9e2ec"/><text x="118" y="28" text-anchor="middle" class="tiny muted">重命名计划</text>
+    <rect x="172" y="8" width="92" height="28" class="button" fill="#fff4f4" stroke="#fac5c5"/><text x="218" y="28" text-anchor="middle" class="tiny" fill="#b42318">应用重命名</text>
+    <rect x="272" y="8" width="60" height="28" class="button" fill="#fff" stroke="#d9e2ec"/><text x="302" y="28" text-anchor="middle" class="tiny muted">撤销</text>
+    <rect x="340" y="8" width="78" height="28" class="button" fill="#fff" stroke="#d9e2ec"/><text x="379" y="28" text-anchor="middle" class="tiny muted">输出目录</text>
+
+    <rect x="500" width="504" height="44" rx="10" fill="#f8fafc" stroke="#d9e2ec"/>
+    <text x="518" y="29" class="tiny muted" font-weight="700">复核 / AI / 导入</text>
+    <rect x="632" y="8" width="72" height="28" class="button" fill="#fff" stroke="#d9e2ec"/><text x="668" y="28" text-anchor="middle" class="tiny muted">复核队列</text>
+    <rect x="712" y="8" width="72" height="28" class="button" fill="#fff" stroke="#d9e2ec"/><text x="748" y="28" text-anchor="middle" class="tiny muted">重复合并</text>
+    <rect x="792" y="8" width="68" height="28" class="button" fill="#ecfdf3" stroke="#b7ead0"/><text x="826" y="28" text-anchor="middle" class="tiny" fill="#087443">AI 阅读</text>
+    <rect x="868" y="8" width="78" height="28" class="button" fill="#eef4ff" stroke="#bdd4ff"/><text x="907" y="28" text-anchor="middle" class="tiny" fill="#1f6feb">Zotero</text>
+  </g>
+
+  <!-- table header -->
+  <rect x="56" y="456" width="1016" height="42" rx="8" fill="#f8fafc" stroke="#d9e2ec"/>
+  <text x="76" y="484" class="tiny muted">状态</text>
+  <text x="150" y="484" class="tiny muted">文件名</text>
+  <text x="360" y="484" class="tiny muted">类型</text>
+  <text x="452" y="484" class="tiny muted">置信度</text>
+  <text x="550" y="484" class="tiny muted">标题</text>
+  <text x="830" y="484" class="tiny muted">DOI / arXiv</text>
+  <text x="952" y="484" class="tiny muted">GB/T 文件名</text>
+
+  <g class="tiny">
+    <rect x="56" y="508" width="1016" height="54" fill="#ffffff" stroke="#edf2f7"/>
+    <circle cx="82" cy="535" r="8" fill="#12b76a"/><text x="108" y="542" class="ink">wang2025_dragfree.pdf</text>
+    <text x="360" y="542" fill="#087443">论文</text><text x="464" y="542" class="muted">0.92</text>
+    <text x="550" y="542" class="ink">Adaptive Control for Test Mass Capture...</text>
+    <text x="830" y="542" class="muted mono">10.1109/TAES...</text><text x="952" y="542" class="muted">Wang 等. Adaptive Control...</text>
+
+    <rect x="56" y="562" width="1016" height="54" fill="#fffaf0" stroke="#f6e6bc"/>
+    <circle cx="82" cy="589" r="8" fill="#f59e0b"/><text x="108" y="596" class="ink">博士论文_低推力轨迹优化.pdf</text>
+    <text x="360" y="596" fill="#b7791f">学位论文</text><text x="464" y="596" class="muted">0.81</text>
+    <text x="550" y="596" class="ink">低推力轨迹优化方法研究</text>
+    <text x="830" y="596" class="muted">无 DOI</text><text x="952" y="596" class="muted">张三. 低推力轨迹优化...</text>
+
+    <rect x="56" y="616" width="1016" height="54" fill="#ffffff" stroke="#edf2f7"/>
+    <circle cx="82" cy="643" r="8" fill="#12b76a"/><text x="108" y="650" class="ink">rtbp_global_optimization.pdf</text>
+    <text x="360" y="650" fill="#087443">论文</text><text x="464" y="650" class="muted">0.88</text>
+    <text x="550" y="650" class="ink">Global Optimization in Restricted Three Body...</text>
+    <text x="830" y="650" class="muted mono">arXiv:2601...</text><text x="952" y="650" class="muted">Li 等. Global Optimization...</text>
+
+    <rect x="56" y="670" width="1016" height="54" fill="#f8fbff" stroke="#edf2f7"/>
+    <circle cx="82" cy="697" r="8" fill="#1f6feb"/><text x="108" y="704" class="ink">扫描版硕士论文.pdf</text>
+    <text x="360" y="704" fill="#1f6feb">OCR</text><text x="464" y="704" class="muted">0.73</text>
+    <text x="550" y="704" class="ink">小推力转移轨道快速设计...</text>
+    <text x="830" y="704" class="muted">OCR 文本</text><text x="952" y="704" class="muted">待确认学校/地点</text>
+  </g>
+
+  <!-- Right inspector -->
+  <rect x="1120" y="330" width="388" height="604" rx="14" class="surface" filter="url(#shadow)"/>
+  <text x="1150" y="370" class="section ink">当前记录</text>
+  <rect x="1150" y="392" width="328" height="6" rx="3" fill="#f59e0b"/>
+  <text x="1150" y="434" class="body ink" font-weight="700">低推力轨迹优化方法研究</text>
+  <text x="1150" y="468" class="small muted">张三 · 2024 · 哈尔滨工业大学</text>
+  <text x="1150" y="498" class="small muted">类型：博士学位论文  置信度：0.81</text>
+  <line x1="1150" y1="524" x2="1478" y2="524" stroke="#d9e2ec"/>
+  <text x="1150" y="560" class="section ink">复核原因</text>
+  <rect x="1150" y="578" width="328" height="92" rx="10" fill="#fffaf0" stroke="#f6e6bc"/>
+  <text x="1170" y="610" class="small" fill="#8a5a00">缺少地点；OCR 已提取题名和学校。</text>
+  <text x="1170" y="642" class="small" fill="#8a5a00">建议确认导师与授予地点后导出 Zotero。</text>
+
+  <text x="1150" y="710" class="section ink">常用下一步</text>
+  <rect x="1150" y="730" width="328" height="42" class="button" fill="#0f766e"/>
+  <text x="1314" y="758" text-anchor="middle" class="small" fill="#fff">复核编辑</text>
+  <rect x="1150" y="784" width="158" height="40" class="button" fill="#ecfdf3" stroke="#b7ead0"/>
+  <text x="1229" y="811" text-anchor="middle" class="small" fill="#087443">AI 粗读/精读</text>
+  <rect x="1320" y="784" width="158" height="40" class="button" fill="#eef4ff" stroke="#bdd4ff"/>
+  <text x="1399" y="811" text-anchor="middle" class="small" fill="#1f6feb">Zotero 检查</text>
+  <rect x="1150" y="846" width="328" height="56" rx="10" fill="#f8fafc" stroke="#d9e2ec"/>
+  <text x="1170" y="878" class="small muted">状态：需复核后再重命名 / 导入</text>
+
+  <!-- Footer -->
+  <rect x="28" y="954" width="1480" height="46" rx="12" fill="#ffffff" stroke="#d9e2ec"/>
+  <text x="56" y="984" class="tiny muted">已扫描 128 个 PDF；96 条可导入 Zotero；11 条待复核；OCR 处理 4 条；AI 笔记 12 条。</text>
+  <text x="1320" y="984" class="tiny" fill="#1f6feb">准备就绪</text>
+</svg>

@@ -804,8 +804,8 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title(APP_TITLE)
-        self.geometry("1240x780")
-        self.minsize(1080, 680)
+        self.geometry("1360x860")
+        self.minsize(1180, 760)
         self.configure(bg=PALETTE["app"])
 
         self._records: list[dict] = []
@@ -817,6 +817,7 @@ class App(tk.Tk):
         self._last_output: Path | None = None
         self._row_by_file: dict[str, dict] = {}
         self._prefs: dict = {}
+        self._init_vars()
 
         self._set_icon()
         self._configure_style()
@@ -824,6 +825,24 @@ class App(tk.Tk):
         self._build_ui()
         self._dir_var.set(self._default_scan_dir())
         self._apply_preferences()
+
+    def _init_vars(self):
+        self._dir_var = tk.StringVar()
+        self._recursive_var = tk.BooleanVar(value=False)
+        self._network_var = tk.BooleanVar(value=True)
+        self._obsidian_var = tk.BooleanVar(value=True)
+        self._style_var = tk.StringVar(value="GB/T 7714")
+        self._obsidian_dir_var = tk.StringVar(value="02_literature")
+        self._obsidian_template_var = tk.StringVar(value="")
+        self._ai_model_var = tk.StringVar(value="gpt-5.4")
+        self._ai_base_url_var = tk.StringVar(value="https://api.openai.com/v1")
+        self._ai_env_var = tk.StringVar(value="OPENAI_API_KEY")
+        self._ocr_var = tk.BooleanVar(value=True)
+        self._ocr_var.trace_add("write", lambda *_: self._sync_ocr_badge())
+        self._ocr_lang_var = tk.StringVar(value="chi_sim+eng")
+        self._zotero_collection_var = tk.StringVar(value="")
+        self._zotero_attach_var = tk.BooleanVar(value=True)
+        self._zotero_dedupe_var = tk.BooleanVar(value=True)
 
     def _set_icon(self):
         ico = _resource_path("assets/pdf_manager.ico")
@@ -846,9 +865,19 @@ class App(tk.Tk):
         style.configure("Group.TFrame", background=PALETTE["surface_alt"])
         style.configure("Dialog.TFrame", background=PALETTE["surface"])
         style.configure("Hero.TFrame", background=PALETTE["hero"])
+        style.configure("Nav.TFrame", background=PALETTE["hero"])
+        style.configure("Main.TFrame", background=PALETTE["app"])
         style.configure("HeroTitle.TLabel", background=PALETTE["hero"], foreground="#ffffff",
                         font=("Microsoft YaHei UI", 18, "bold"))
         style.configure("HeroText.TLabel", background=PALETTE["hero"], foreground="#d6e2f0")
+        style.configure("NavTitle.TLabel", background=PALETTE["hero"], foreground="#ffffff",
+                        font=("Microsoft YaHei UI", 14, "bold"))
+        style.configure("NavMuted.TLabel", background=PALETTE["hero"], foreground="#b8c4d8")
+        style.configure("NavItem.TLabel", background=PALETTE["hero"], foreground="#d8e2f1",
+                        font=("Microsoft YaHei UI", 10))
+        style.configure("PageTitle.TLabel", background=PALETTE["app"], foreground=PALETTE["ink"],
+                        font=("Microsoft YaHei UI", 18, "bold"))
+        style.configure("PageMuted.TLabel", background=PALETTE["app"], foreground=PALETTE["muted"])
         style.configure("Section.TLabel", background=PALETTE["surface"], foreground=PALETTE["ink"],
                         font=("Microsoft YaHei UI", 10, "bold"))
         style.configure("PanelTitle.TLabel", background=PALETTE["surface_alt"], foreground=PALETTE["ink"],
@@ -875,31 +904,97 @@ class App(tk.Tk):
         style.configure("Horizontal.TProgressbar", troughcolor="#dde5ef", background=PALETTE["primary"])
 
     def _build_ui(self):
-        self.columnconfigure(0, weight=1)
-        self.rowconfigure(2, weight=1)
+        self.columnconfigure(1, weight=1)
+        self.rowconfigure(0, weight=1)
+        self._build_sidebar()
+        self._main = ttk.Frame(self, style="Main.TFrame", padding=(18, 14))
+        self._main.grid(row=0, column=1, sticky="nsew")
+        self._main.columnconfigure(0, weight=1)
+        self._main.rowconfigure(3, weight=1)
         self._build_header()
         self._build_toolbar()
+        self._build_kpi_strip()
         self._build_table()
         self._build_footer()
 
-    def _build_header(self):
-        header = ttk.Frame(self, style="Hero.TFrame", padding=(18, 14))
-        header.grid(row=0, column=0, sticky="ew")
-        header.columnconfigure(1, weight=1)
-        mark = tk.Canvas(header, width=52, height=52, bg=PALETTE["hero"], bd=0, highlightthickness=0)
-        mark.grid(row=0, column=0, rowspan=2, sticky="w", padx=(0, 14))
-        mark.create_oval(2, 2, 50, 50, fill=PALETTE["primary"], outline="")
-        mark.create_rectangle(18, 12, 39, 44, fill="#ffffff", outline="")
-        mark.create_polygon(32, 12, 39, 19, 32, 19, fill="#d9e9ff", outline="")
-        mark.create_text(28, 29, text="PDF", fill="#d92d20", font=("Segoe UI", 8, "bold"))
-        mark.create_line(20, 37, 36, 37, fill=PALETTE["primary"], width=2)
+    def _build_sidebar(self):
+        nav = ttk.Frame(self, style="Nav.TFrame", padding=(20, 22))
+        nav.grid(row=0, column=0, sticky="nsew")
+        nav.grid_propagate(False)
+        nav.configure(width=228)
+        nav.columnconfigure(0, weight=1)
 
-        ttk.Label(header, text=APP_TITLE, style="HeroTitle.TLabel").grid(row=0, column=1, sticky="w")
+        mark = tk.Canvas(nav, width=42, height=42, bg=PALETTE["hero"], bd=0, highlightthickness=0)
+        mark.grid(row=0, column=0, sticky="w")
+        mark.create_oval(1, 1, 41, 41, fill=PALETTE["primary"], outline="")
+        mark.create_rectangle(15, 10, 31, 34, fill="#ffffff", outline="")
+        mark.create_polygon(25, 10, 31, 16, 25, 16, fill="#dbeafe", outline="")
+        mark.create_text(23, 25, text="PDF", fill="#d92d20", font=("Segoe UI", 7, "bold"))
+
+        ttk.Label(nav, text="PDF 文献", style="NavTitle.TLabel").grid(row=1, column=0, sticky="w", pady=(12, 0))
+        ttk.Label(nav, text="Literature Workbench", style="NavMuted.TLabel").grid(row=2, column=0, sticky="w", pady=(2, 28))
+
+        items = [
+            ("●  工作台", None),
+            ("○  复核队列", self._open_review_queue),
+            ("○  重复合并", self._open_duplicate_dialog),
+            ("○  AI 阅读", self._open_ai_reading_dialog),
+            ("○  Zotero 导入", self._import_zotero),
+            ("○  Obsidian", self._import_obsidian),
+        ]
+        for idx, (text, command) in enumerate(items, start=3):
+            if command:
+                btn = tk.Button(
+                    nav,
+                    text=text,
+                    command=command,
+                    anchor="w",
+                    bg=PALETTE["hero"],
+                    fg="#d8e2f1",
+                    activebackground="#243042",
+                    activeforeground="#ffffff",
+                    relief=tk.FLAT,
+                    bd=0,
+                    padx=12,
+                    pady=8,
+                    font=("Microsoft YaHei UI", 10),
+                )
+            else:
+                btn = tk.Label(
+                    nav,
+                    text=text,
+                    anchor="w",
+                    bg="#243042",
+                    fg="#ffffff",
+                    padx=12,
+                    pady=9,
+                    font=("Microsoft YaHei UI", 10, "bold"),
+                )
+            btn.grid(row=idx, column=0, sticky="ew", pady=(0, 8))
+
+        spacer = ttk.Frame(nav, style="Nav.TFrame")
+        spacer.grid(row=20, column=0, sticky="nsew")
+        nav.rowconfigure(20, weight=1)
+        card = tk.Frame(nav, bg="#1a2638", padx=14, pady=12, highlightbackground="#314158", highlightthickness=1)
+        card.grid(row=21, column=0, sticky="ew", pady=(12, 0))
+        tk.Label(card, text="今日扫描", bg="#1a2638", fg="#d8e2f1", font=("Microsoft YaHei UI", 9)).pack(anchor="w")
+        self._nav_total_var = tk.StringVar(value="0 PDF")
+        tk.Label(card, textvariable=self._nav_total_var, bg="#1a2638", fg="#ffffff",
+                 font=("Microsoft YaHei UI", 20, "bold")).pack(anchor="w", pady=(8, 2))
+        self._nav_summary_var = tk.StringVar(value="0 可导入 · 0 待复核")
+        tk.Label(card, textvariable=self._nav_summary_var, bg="#1a2638", fg="#8fb3ff",
+                 font=("Microsoft YaHei UI", 8)).pack(anchor="w")
+
+    def _build_header(self):
+        header = ttk.Frame(self._main, style="Main.TFrame")
+        header.grid(row=0, column=0, sticky="ew")
+        header.columnconfigure(0, weight=1)
+        ttk.Label(header, text="科研 PDF 文献管理", style="PageTitle.TLabel").grid(row=0, column=0, sticky="w")
         ttk.Label(
             header,
-            text="扫描、复核、国标命名、Zotero / Obsidian 导出和 AI 阅读笔记。",
-            style="HeroText.TLabel",
-        ).grid(row=1, column=1, sticky="w", pady=(4, 0))
+            text="国标命名、待复核、Zotero / Obsidian、AI 粗读，一屏完成",
+            style="PageMuted.TLabel",
+        ).grid(row=1, column=0, sticky="w", pady=(4, 0))
 
         self._summary_vars = {
             "all": tk.StringVar(value="0\nPDF"),
@@ -907,49 +1002,32 @@ class App(tk.Tk):
             "review": tk.StringVar(value="0\n待复核"),
             "error": tk.StringVar(value="0\n失败"),
         }
-        summary = ttk.Frame(header, style="Hero.TFrame")
-        summary.grid(row=0, column=2, rowspan=2, sticky="e")
-        for idx, (key, label) in enumerate((("all", "总数"), ("paper", "论文"), ("review", "复核"), ("error", "失败"))):
-            box = tk.Frame(summary, bg=PALETTE["hero_2"], padx=12, pady=7)
-            box.grid(row=0, column=idx, padx=(8, 0), sticky="e")
-            tk.Label(box, textvariable=self._summary_vars[key], bg=PALETTE["hero_2"], fg="#ffffff",
-                     font=("Microsoft YaHei UI", 12, "bold"), justify=tk.CENTER).pack()
-            tk.Label(box, text=label, bg=PALETTE["hero_2"], fg="#b9c6d8", font=("Microsoft YaHei UI", 8)).pack()
+        quick = ttk.Frame(header, style="Main.TFrame")
+        quick.grid(row=0, column=1, rowspan=2, sticky="e")
+        self._top_ocr_label = tk.Label(quick, text="OCR 开", bg=PALETTE["soft_green"], fg="#087443",
+                                       padx=14, pady=7, font=("Microsoft YaHei UI", 9))
+        self._top_ocr_label.pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Combobox(quick, textvariable=self._style_var, values=list(STYLE_OPTIONS),
+                     state="readonly", width=12).pack(side=tk.LEFT, padx=(0, 8))
+        self._scan_btn = ttk.Button(quick, text="开始扫描", style="Primary.TButton", command=self._start_scan)
+        self._scan_btn.pack(side=tk.LEFT)
 
     def _build_toolbar(self):
         shell = ttk.Frame(self, style="Surface.TFrame", padding=(14, 12))
-        shell.grid(row=1, column=0, sticky="ew", padx=14, pady=(14, 10))
+        shell.grid(row=1, column=0, sticky="ew", pady=(18, 14))
         shell.columnconfigure(1, weight=1)
 
         ttk.Label(shell, text="扫描文件夹", style="Section.TLabel").grid(row=0, column=0, sticky="w")
-        self._dir_var = tk.StringVar()
         ttk.Entry(shell, textvariable=self._dir_var).grid(row=1, column=0, columnspan=2, sticky="ew", pady=(6, 0), padx=(0, 10))
         ttk.Button(shell, text="选择文件夹", command=self._browse).grid(row=1, column=2, sticky="ew", padx=(0, 8))
-        self._scan_btn = ttk.Button(shell, text="开始扫描", style="Primary.TButton", command=self._start_scan)
-        self._scan_btn.grid(row=1, column=3, sticky="ew")
+        ttk.Button(shell, text="加载上次结果", command=self._load_session).grid(row=1, column=3, sticky="ew")
 
         options = ttk.Frame(shell, style="Surface.TFrame")
         options.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(12, 0))
-        self._recursive_var = tk.BooleanVar(value=False)
-        self._network_var = tk.BooleanVar(value=True)
-        self._obsidian_var = tk.BooleanVar(value=True)
-        self._style_var = tk.StringVar(value="GB/T 7714")
-        self._obsidian_dir_var = tk.StringVar(value="02_literature")
-        self._obsidian_template_var = tk.StringVar(value="")
-        self._ai_model_var = tk.StringVar(value="gpt-5.4")
-        self._ai_base_url_var = tk.StringVar(value="https://api.openai.com/v1")
-        self._ai_env_var = tk.StringVar(value="OPENAI_API_KEY")
-        self._ocr_var = tk.BooleanVar(value=True)
-        self._ocr_lang_var = tk.StringVar(value="chi_sim+eng")
-        self._zotero_collection_var = tk.StringVar(value="")
-        self._zotero_attach_var = tk.BooleanVar(value=True)
-        self._zotero_dedupe_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(options, text="递归子目录", variable=self._recursive_var).pack(side=tk.LEFT)
         ttk.Checkbutton(options, text="联网补全 DOI / arXiv", variable=self._network_var).pack(side=tk.LEFT, padx=(18, 0))
         ttk.Checkbutton(options, text="OCR 兜底", variable=self._ocr_var).pack(side=tk.LEFT, padx=(18, 0))
         ttk.Checkbutton(options, text="生成 Obsidian 文献笔记", variable=self._obsidian_var).pack(side=tk.LEFT, padx=(18, 0))
-        ttk.Label(options, text="引用风格", style="Muted.TLabel").pack(side=tk.LEFT, padx=(18, 6))
-        ttk.Combobox(options, textvariable=self._style_var, values=list(STYLE_OPTIONS), state="readonly", width=12).pack(side=tk.LEFT)
         ttk.Label(options, text="默认按 GB/T 7714 命名；待复核项不会静默进入 Zotero。", style="Muted.TLabel").pack(side=tk.RIGHT)
 
         obsidian_opts = ttk.Frame(shell, style="Surface.TFrame")
@@ -984,17 +1062,42 @@ class App(tk.Tk):
         self._progress = ttk.Progressbar(shell, mode="determinate")
         self._progress.grid(row=6, column=0, columnspan=4, sticky="ew", pady=(12, 0))
 
+    def _build_kpi_strip(self):
+        strip = ttk.Frame(self._main, style="Main.TFrame")
+        strip.grid(row=2, column=0, sticky="ew", pady=(0, 14))
+        for idx in range(4):
+            strip.columnconfigure(idx, weight=1)
+        items = [
+            ("all", "总 PDF", "#eef4ff", "#1f6feb"),
+            ("paper", "可导入 Zotero", "#ecfdf3", "#087443"),
+            ("review", "待复核", "#fff7e8", "#b7791f"),
+            ("error", "失败", "#fff4f4", "#b42318"),
+        ]
+        for idx, (key, label, bg, fg) in enumerate(items):
+            box = tk.Frame(strip, bg=PALETTE["surface"], padx=16, pady=12, highlightbackground=PALETTE["line"], highlightthickness=1)
+            box.grid(row=0, column=idx, sticky="ew", padx=(0 if idx == 0 else 10, 0))
+            icon = tk.Label(box, text="●", bg=bg, fg=fg, padx=8, pady=3, font=("Microsoft YaHei UI", 9, "bold"))
+            icon.pack(side=tk.LEFT, padx=(0, 12))
+            tk.Label(box, text=label, bg=PALETTE["surface"], fg=PALETTE["muted"], font=("Microsoft YaHei UI", 8)).pack(anchor="w")
+            tk.Label(box, textvariable=self._summary_vars[key], bg=PALETTE["surface"], fg=PALETTE["ink"],
+                     font=("Microsoft YaHei UI", 12, "bold"), justify=tk.LEFT).pack(anchor="w")
+
     def _build_table(self):
-        body = ttk.Frame(self, style="Surface.TFrame", padding=(14, 12))
-        body.grid(row=2, column=0, sticky="nsew", padx=14)
+        body = ttk.Frame(self._main, style="Main.TFrame")
+        body.grid(row=3, column=0, sticky="nsew")
         body.rowconfigure(2, weight=1)
         body.columnconfigure(0, weight=1)
-        body.columnconfigure(1, minsize=270)
+        body.columnconfigure(1, minsize=340)
 
-        top = ttk.Frame(body, style="Surface.TFrame")
+        table_card = ttk.Frame(body, style="Surface.TFrame", padding=(14, 12))
+        table_card.grid(row=0, column=0, rowspan=3, sticky="nsew", padx=(0, 14))
+        table_card.rowconfigure(2, weight=1)
+        table_card.columnconfigure(0, weight=1)
+
+        top = ttk.Frame(table_card, style="Surface.TFrame")
         top.grid(row=0, column=0, sticky="ew", pady=(0, 8))
         top.columnconfigure(0, weight=1)
-        ttk.Label(top, text="扫描结果", style="Section.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(top, text="文献列表", style="Section.TLabel").grid(row=0, column=0, sticky="w")
 
         primary_actions = ttk.Frame(top, style="Surface.TFrame")
         primary_actions.grid(row=0, column=1, sticky="e")
@@ -1002,7 +1105,6 @@ class App(tk.Tk):
             ("全选", self._select_all, "Toolbutton.TButton"),
             ("反选", self._invert_sel, "Toolbutton.TButton"),
             ("复核编辑", self._open_review_dialog, "Accent.TButton"),
-            ("加载上次结果", self._load_session, "Toolbutton.TButton"),
             ("导出索引 / 引用", self._export, "Primary.TButton"),
         ]
         for i, (text, command, btn_style) in enumerate(buttons):
@@ -1010,7 +1112,7 @@ class App(tk.Tk):
                 side=tk.LEFT, padx=(0 if i == 0 else 6, 0)
             )
 
-        secondary = ttk.Frame(body, style="Surface.TFrame")
+        secondary = ttk.Frame(table_card, style="Surface.TFrame")
         secondary.grid(row=1, column=0, sticky="ew", pady=(0, 10))
         secondary.columnconfigure(0, weight=1)
         secondary.columnconfigure(1, weight=1)
@@ -1045,7 +1147,7 @@ class App(tk.Tk):
                 row=idx // 2, column=idx % 2, sticky="w", padx=(0, 14), pady=(0, 6)
             )
 
-        table_frame = ttk.Frame(body, style="Surface.TFrame")
+        table_frame = ttk.Frame(table_card, style="Surface.TFrame")
         table_frame.grid(row=2, column=0, sticky="nsew")
         table_frame.rowconfigure(0, weight=1)
         table_frame.columnconfigure(0, weight=1)
@@ -1080,39 +1182,55 @@ class App(tk.Tk):
         return group
 
     def _build_detail_panel(self, body):
-        panel = ttk.Frame(body, style="Subtle.TFrame", padding=(12, 12))
+        panel = ttk.Frame(body, style="Surface.TFrame", padding=(18, 16))
         panel.grid(row=0, column=1, rowspan=3, sticky="nsew", padx=(12, 0))
         panel.columnconfigure(0, weight=1)
-        ttk.Label(panel, text="当前记录", style="PanelTitle.TLabel").grid(row=0, column=0, sticky="w")
-        self._detail_status_canvas = tk.Canvas(panel, width=235, height=5, bg=PALETTE["surface_alt"], bd=0, highlightthickness=0)
-        self._detail_status_canvas.grid(row=1, column=0, sticky="ew", pady=(10, 0))
+        ttk.Label(panel, text="复核 Inspector", style="Section.TLabel").grid(row=0, column=0, sticky="w")
+        self._detail_status_canvas = tk.Canvas(panel, width=300, height=6, bg=PALETTE["surface"], bd=0, highlightthickness=0)
+        self._detail_status_canvas.grid(row=1, column=0, sticky="ew", pady=(16, 0))
         self._detail_title_var = tk.StringVar(value="尚未选择")
         self._detail_meta_var = tk.StringVar(value="选择一条记录后查看作者、DOI、复核原因。")
         self._detail_hint_var = tk.StringVar(value="建议流程：扫描 -> 批量复核 -> 导出 Zotero / Obsidian。")
-        ttk.Label(panel, textvariable=self._detail_title_var, style="PanelTitle.TLabel", wraplength=235).grid(
+        ttk.Label(panel, textvariable=self._detail_title_var, style="Section.TLabel", wraplength=305).grid(
             row=2, column=0, sticky="ew", pady=(14, 6)
         )
-        ttk.Label(panel, textvariable=self._detail_meta_var, style="SubtleMuted.TLabel", wraplength=235).grid(
+        ttk.Label(panel, textvariable=self._detail_meta_var, style="Muted.TLabel", wraplength=305).grid(
             row=3, column=0, sticky="ew"
         )
-        ttk.Separator(panel).grid(row=4, column=0, sticky="ew", pady=12)
-        ttk.Label(panel, text="常用下一步", style="PanelTitle.TLabel").grid(row=5, column=0, sticky="w")
+        reason_box = ttk.Frame(panel, style="Group.TFrame", padding=(12, 10))
+        reason_box.grid(row=4, column=0, sticky="ew", pady=(16, 12))
+        reason_box.columnconfigure(0, weight=1)
+        ttk.Label(reason_box, text="复核提示", style="Group.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(reason_box, textvariable=self._detail_hint_var, style="SubtleMuted.TLabel", wraplength=280).grid(
+            row=1, column=0, sticky="ew", pady=(8, 0)
+        )
+        ttk.Label(panel, text="快捷操作", style="Section.TLabel").grid(row=5, column=0, sticky="w", pady=(8, 0))
         ttk.Button(panel, text="复核编辑", style="Accent.TButton", command=self._open_review_dialog).grid(
-            row=6, column=0, sticky="ew", pady=(8, 4)
+            row=6, column=0, sticky="ew", pady=(10, 4)
         )
-        ttk.Button(panel, text="AI 粗读 / 精读", style="Accent.TButton", command=self._open_ai_reading_dialog).grid(
-            row=7, column=0, sticky="ew", pady=4
+        pair = ttk.Frame(panel, style="Surface.TFrame")
+        pair.grid(row=7, column=0, sticky="ew", pady=4)
+        pair.columnconfigure(0, weight=1)
+        pair.columnconfigure(1, weight=1)
+        ttk.Button(pair, text="AI 粗读", command=self._open_ai_reading_dialog).grid(row=0, column=0, sticky="ew", padx=(0, 6))
+        ttk.Button(pair, text="Zotero 检查", command=self._open_zotero_review_dialog).grid(row=0, column=1, sticky="ew", padx=(6, 0))
+        pair2 = ttk.Frame(panel, style="Surface.TFrame")
+        pair2.grid(row=8, column=0, sticky="ew", pady=4)
+        pair2.columnconfigure(0, weight=1)
+        pair2.columnconfigure(1, weight=1)
+        ttk.Button(pair2, text="一键通过", command=self._accept_selected_review).grid(row=0, column=0, sticky="ew", padx=(0, 6))
+        ttk.Button(pair2, text="重命名计划", command=self._write_rename_plan).grid(row=0, column=1, sticky="ew", padx=(6, 0))
+        ttk.Separator(panel).grid(row=9, column=0, sticky="ew", pady=14)
+        ttk.Button(panel, text="导入 Zotero", command=self._import_zotero).grid(
+            row=10, column=0, sticky="ew", pady=(0, 4)
         )
-        ttk.Button(panel, text="Zotero 导出检查", command=self._open_zotero_review_dialog).grid(
-            row=8, column=0, sticky="ew", pady=4
-        )
-        ttk.Label(panel, textvariable=self._detail_hint_var, style="SubtleMuted.TLabel", wraplength=235).grid(
-            row=9, column=0, sticky="ew", pady=(14, 0)
+        ttk.Button(panel, text="导入 Obsidian", command=self._import_obsidian).grid(
+            row=11, column=0, sticky="ew", pady=4
         )
 
     def _build_footer(self):
-        footer = ttk.Frame(self, padding=(14, 10))
-        footer.grid(row=3, column=0, sticky="ew")
+        footer = ttk.Frame(self._main, style="Surface.TFrame", padding=(14, 10))
+        footer.grid(row=4, column=0, sticky="ew", pady=(14, 0))
         footer.columnconfigure(0, weight=1)
         self._detail_var = tk.StringVar(value="选择文件后显示 DOI、作者、识别理由和复核提示。")
         ttk.Label(footer, textvariable=self._detail_var, style="Status.TLabel").grid(row=0, column=0, sticky="w")
@@ -1933,6 +2051,21 @@ class App(tk.Tk):
         self._summary_vars["paper"].set(f"{papers}\n论文")
         self._summary_vars["review"].set(f"{review}\n待复核")
         self._summary_vars["error"].set(f"{errors}\n失败")
+        if hasattr(self, "_nav_summary_var"):
+            self._nav_summary_var.set(f"{papers} 可导入 · {review} 待复核")
+        if hasattr(self, "_nav_total_var"):
+            self._nav_total_var.set(f"{total} PDF")
+        self._sync_ocr_badge()
+
+    def _sync_ocr_badge(self):
+        if not hasattr(self, "_top_ocr_label"):
+            return
+        enabled = self._ocr_var.get()
+        self._top_ocr_label.configure(
+            text="OCR 开" if enabled else "OCR 关",
+            bg=PALETTE["soft_green"] if enabled else PALETTE["surface_alt"],
+            fg="#087443" if enabled else PALETTE["muted"],
+        )
 
     def _summary_text(self) -> str:
         total = len(self._records)
