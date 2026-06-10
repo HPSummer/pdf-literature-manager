@@ -229,6 +229,37 @@ def test_network_failure_fallback():
     assert result.get("title") == "Fallback Title"
 
 
+def test_ai_reading_openai_compatible_call_and_note_do_not_store_key(tmp_path):
+    from pdf_manager import ai_reading
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"choices": [{"message": {"content": "## 粗读\n值得精读。"}}]}
+
+    with patch("requests.post", return_value=FakeResponse()) as post:
+        content = ai_reading.call_openai_compatible(
+            api_key="secret-test-key",
+            base_url="https://example.test/v1",
+            model="gpt-5.4",
+            prompt="Read this paper",
+        )
+    assert "值得精读" in content
+    args, kwargs = post.call_args
+    assert args[0] == "https://example.test/v1/chat/completions"
+    assert kwargs["json"]["model"] == "gpt-5.4"
+    assert kwargs["headers"]["Authorization"] == "Bearer secret-test-key"
+
+    rec = {"bibtex_key": "Smith2026", "title": "A Paper", "original_filename": "paper.pdf"}
+    note = ai_reading.write_note(tmp_path, rec, "rough", "gpt-5.4", "https://example.test/v1", content)
+    text = note.read_text(encoding="utf-8")
+    assert "gpt-5.4" in text
+    assert "secret-test-key" not in text
+    assert "## 粗读" in text
+
+
 def test_chinese_thesis_metadata_fallback():
     extracted = {
         "meta_title": None,

@@ -571,6 +571,148 @@ class ZoteroReviewDialog(tk.Toplevel):
         return f"classified as {rec.get('detected_type') or 'unknown'}"
 
 
+class AIReadingDialog(tk.Toplevel):
+    def __init__(self, master: "App", rec: dict):
+        super().__init__(master)
+        self.title("AI 粗读 / 精读")
+        self.geometry("640x520")
+        self.minsize(560, 440)
+        self.transient(master)
+        self._master = master
+        self._rec = rec
+        self._busy = False
+        self._result_path: Path | None = None
+        self._mode_var = tk.StringVar(value="rough")
+        self._model_var = tk.StringVar(value="gpt-5.4")
+        self._base_url_var = tk.StringVar(value="https://api.openai.com/v1")
+        self._env_var = tk.StringVar(value="OPENAI_API_KEY")
+        self._temp_key_var = tk.StringVar(value="")
+        self._status_var = tk.StringVar(value="密钥不会写入配置、日志、报告或 GitHub；留空则读取环境变量。")
+        self._build()
+
+    def _build(self):
+        root = ttk.Frame(self, padding=14)
+        root.grid(row=0, column=0, sticky="nsew")
+        self.columnconfigure(0, weight=1)
+        self.rowconfigure(0, weight=1)
+        root.columnconfigure(1, weight=1)
+        root.rowconfigure(7, weight=1)
+
+        title = self._rec.get("title") or self._rec.get("original_filename") or "Untitled"
+        ttk.Label(root, text="AI 阅读", style="Section.TLabel").grid(row=0, column=0, columnspan=2, sticky="w")
+        ttk.Label(root, text=title, wraplength=590, style="Muted.TLabel").grid(
+            row=1, column=0, columnspan=2, sticky="ew", pady=(4, 12)
+        )
+
+        mode_box = ttk.Frame(root)
+        mode_box.grid(row=2, column=0, columnspan=2, sticky="w", pady=4)
+        ttk.Radiobutton(mode_box, text="粗读筛选", variable=self._mode_var, value="rough").pack(side=tk.LEFT)
+        ttk.Radiobutton(mode_box, text="精读笔记", variable=self._mode_var, value="deep").pack(side=tk.LEFT, padx=(16, 0))
+
+        for row, (label, var) in enumerate((
+            ("模型", self._model_var),
+            ("Base URL", self._base_url_var),
+            ("环境变量", self._env_var),
+        ), start=3):
+            ttk.Label(root, text=label).grid(row=row, column=0, sticky="w", pady=4)
+            ttk.Entry(root, textvariable=var).grid(row=row, column=1, sticky="ew", pady=4)
+
+        ttk.Label(root, text="临时 API Key").grid(row=6, column=0, sticky="nw", pady=4)
+        key_frame = ttk.Frame(root)
+        key_frame.grid(row=6, column=1, sticky="new", pady=4)
+        key_frame.columnconfigure(0, weight=1)
+        ttk.Entry(key_frame, textvariable=self._temp_key_var, show="*").grid(row=0, column=0, sticky="ew")
+        ttk.Label(
+            key_frame,
+            text="可留空；若填写，仅本次运行内存使用，不保存。",
+            style="Muted.TLabel",
+        ).grid(row=1, column=0, sticky="w", pady=(3, 0))
+
+        ttk.Label(root, text="阅读偏好").grid(row=7, column=0, sticky="nw", pady=4)
+        self._preference = tk.Text(root, height=7, wrap=tk.WORD, font=("Microsoft YaHei UI", 9))
+        self._preference.grid(row=7, column=1, sticky="nsew", pady=4)
+        self._preference.insert(
+            "1.0",
+            "偏好：航天动力学、小推力轨迹优化、最优控制、RTBP、ADRC；优先判断是否值得精读和引用。",
+        )
+
+        ttk.Label(root, textvariable=self._status_var, style="Muted.TLabel").grid(
+            row=8, column=0, columnspan=2, sticky="ew", pady=(8, 0)
+        )
+        buttons = ttk.Frame(root)
+        buttons.grid(row=9, column=0, columnspan=2, sticky="e", pady=(12, 0))
+        self._run_btn = ttk.Button(buttons, text="生成阅读笔记", style="Primary.TButton", command=self._run)
+        self._run_btn.pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Button(buttons, text="打开结果", command=self._open_result).pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Button(buttons, text="关闭", command=self.destroy).pack(side=tk.LEFT)
+
+    def _run(self):
+        if self._busy:
+            return
+        pdf_path = Path(self._rec.get("absolute_path") or "")
+        if not pdf_path.exists():
+            messagebox.showerror("文件不存在", f"找不到 PDF：\n{pdf_path}")
+            return
+        scan_dir = self._master._dir_var.get().strip()
+        if not scan_dir:
+            messagebox.showinfo("未选择文件夹", "请先选择扫描文件夹。")
+            return
+        params = {
+            "mode": self._mode_var.get(),
+            "model": self._model_var.get().strip(),
+            "base_url": self._base_url_var.get().strip(),
+            "env_name": self._env_var.get().strip(),
+            "temporary_key": self._temp_key_var.get(),
+            "preference": self._preference.get("1.0", tk.END).strip(),
+        }
+        self._busy = True
+        self._run_btn.configure(state=tk.DISABLED)
+        self._status_var.set("正在调用模型生成阅读笔记，请稍候...")
+        threading.Thread(target=self._worker, args=(pdf_path, Path(scan_dir) / OUTPUT_DIR_NAME, params), daemon=True).start()
+
+    def _worker(self, pdf_path: Path, out_dir: Path, params: dict):
+        try:
+            from pdf_manager import ai_reading
+
+            api_key = ai_reading.resolve_api_key(params["env_name"], params["temporary_key"])
+            result = ai_reading.generate_reading(
+                rec=self._rec,
+                pdf_path=pdf_path,
+                out_dir=out_dir,
+                mode=params["mode"],
+                model=params["model"] or ai_reading.DEFAULT_MODEL,
+                base_url=params["base_url"] or ai_reading.DEFAULT_BASE_URL,
+                api_key=api_key,
+                preference=params["preference"],
+            )
+            self.after(0, lambda: self._finish(result, None))
+        except Exception as exc:
+            err = exc
+            self.after(0, lambda: self._finish(None, err))
+
+    def _finish(self, result: Path | None, exc: Exception | None):
+        self._busy = False
+        self._run_btn.configure(state=tk.NORMAL)
+        if exc:
+            messagebox.showerror("AI 阅读失败", str(exc))
+            self._status_var.set("生成失败。请检查 API Key、Base URL、模型名和网络。")
+            return
+        self._result_path = result
+        self._status_var.set(f"已生成：{result}")
+        self._master._status_var.set(f"AI 阅读笔记已生成：{result.name}")
+
+    def _open_result(self):
+        if self._result_path and self._result_path.exists():
+            os.startfile(str(self._result_path))
+            return
+        scan_dir = self._master._dir_var.get().strip()
+        notes_dir = Path(scan_dir) / OUTPUT_DIR_NAME / "ai_reading_notes" if scan_dir else None
+        if notes_dir and notes_dir.exists():
+            os.startfile(str(notes_dir))
+            return
+        messagebox.showinfo("暂无结果", "请先生成 AI 阅读笔记。")
+
+
 class DuplicateDialog(tk.Toplevel):
     def __init__(self, master: "App"):
         super().__init__(master)
@@ -804,6 +946,7 @@ class App(tk.Tk):
             ("撤销重命名", self._undo_rename, "Toolbutton.TButton"),
             ("批量复核", self._open_batch_review_dialog, "Toolbutton.TButton"),
             ("重复合并", self._open_duplicate_dialog, "Toolbutton.TButton"),
+            ("AI 阅读", self._open_ai_reading_dialog, "Accent.TButton"),
             ("打开输出目录", self._open_output, "Toolbutton.TButton"),
             ("Zotero 检查", self._open_zotero_review_dialog, "Toolbutton.TButton"),
             ("导入 Zotero", self._import_zotero, "Toolbutton.TButton"),
@@ -1115,6 +1258,17 @@ class App(tk.Tk):
             return
         item, rec = selected
         ReviewDialog(self, item, rec)
+
+    def _open_ai_reading_dialog(self):
+        selected = self._selected_item()
+        if not selected:
+            messagebox.showinfo("未选择文献", "请先选择一条需要粗读/精读的记录。")
+            return
+        _item, rec = selected
+        if rec.get("detected_type") not in {"paper", "thesis"}:
+            if not messagebox.askyesno("非文献记录", "当前记录不是 paper/thesis，仍要生成 AI 阅读笔记吗？"):
+                return
+        AIReadingDialog(self, rec)
 
     def _load_session(self):
         scan_dir = self._dir_var.get().strip()
