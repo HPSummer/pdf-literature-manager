@@ -10,8 +10,9 @@ Windows 一键 PDF 文献管理工具，面向论文、硕士/博士学位论文
 - 支持 IEEE、APA、MLA、Chicago、GB/T 7714
 - 生成 `references.bib`、`references.ris`、Markdown 引用列表和 CSV/JSON 索引
 - 生成 Obsidian 文献笔记，并可一键复制到 vault 的 `02_literature`
-- 支持 Obsidian 笔记模板和目标子目录配置
+- 支持 Obsidian 笔记模板和目标子目录配置，模板可使用 `zotero_key`、`citation_gbt`、`citation_ieee`、`school`、`place` 等变量
 - 支持 Zotero 等文献管理软件导入 BibTeX/RIS，并生成 Zotero 导入遗漏报告
+- 提供 Zotero 导出检查 / 待复核面板，可按 skipped、unknown、document、needs_review、缺 DOI、缺作者筛选并批量修正
 - 支持批量复核、重复文献合并标记、重命名日志和撤销重命名
 - 增强中文学位论文元数据提取：题名、作者、导师、学校、地点、年份
 - 提供 GUI 和 CLI 两种使用方式
@@ -32,8 +33,9 @@ PDF文献管理器.exe
 4. 点击“导出索引 / 引用”。
 5. 需要重命名时先生成“重命名计划”，确认后再“应用重命名”。
 6. 需要批量修正时使用“批量复核”；重复条目使用“重复合并”生成合并标记。
-7. 使用“导入 Zotero”“导入 Obsidian”完成外部软件导入；若 Zotero 条目不完整，查看 `zotero_import_report.md` 并批量复核后重新导出。
-8. 重命名后可通过“撤销重命名”按日志恢复。
+7. 使用“Zotero 检查”查看本次可导入数量和 skipped 条目，必要时批量标为 `paper` 或 `thesis` 后重新导出。
+8. 使用“导入 Zotero”“导入 Obsidian”完成外部软件导入；若 Zotero 条目不完整，可打开待复核面板或 `zotero_import_report.md`。
+9. 重命名后可通过“撤销重命名”按日志恢复。
 
 ## CLI 使用
 
@@ -64,6 +66,8 @@ _pdf_manager_output/
 | `duplicates.md` | 重复文献分组与合并标记 |
 | `rename_log.jsonl` / `rename_log.md` | 重命名与撤销记录 |
 | `session.json` | GUI 可重新加载的扫描结果 |
+
+Obsidian 模板变量包括：`citekey`、`bibtex_key`、`zotero_key`、`title`、`authors`、`year`、`venue`、`school`、`place`、`doi`、`arxiv_id`、`citation`、`citation_gbt`、`citation_ieee`、`type`、`thesis_type`、`advisor`、`date_added`。
 
 ## 开发
 

@@ -280,7 +280,7 @@ def test_selected_style_reference_output(tmp_path):
     out = writers.write_all([rec], str(tmp_path), {"citation_style": "apa"})
     assert (out / "references_apa.md").exists()
     assert "Smith" in (out / "references_apa.md").read_text(encoding="utf-8")
-    assert "citation_style: apa" in (out / "obsidian_notes" / "Smith2024Great.md").read_text(encoding="utf-8")
+    assert 'citation_style: "apa"' in (out / "obsidian_notes" / "Smith2024Great.md").read_text(encoding="utf-8")
     session = (out / "session.json").read_text(encoding="utf-8")
     assert '"citation_style": "apa"' in session
     assert "DOI detected" in session
@@ -350,6 +350,37 @@ def test_ris_and_import_guide_output(tmp_path):
     assert "needs review" in report
 
 
+def test_writer_generates_missing_bibtex_for_reviewed_record(tmp_path):
+    from pdf_manager import writers
+
+    rec = {
+        "original_filename": "reviewed.pdf",
+        "absolute_path": str(tmp_path / "reviewed.pdf"),
+        "relative_path": "reviewed.pdf",
+        "file_size": 100,
+        "page_count": 10,
+        "detected_type": "paper",
+        "confidence": 0.6,
+        "title": "Reviewed Paper",
+        "authors": ["Alice Smith"],
+        "year": "2026",
+        "venue": "Journal of Testing",
+        "doi": "10.1000/reviewed",
+        "arxiv_id": None,
+        "url": None,
+        "publisher": None,
+        "bibtex_key": "Smith2026Reviewed",
+        "tag": None,
+        "needs_review": False,
+        "_bibtex_entry": None,
+    }
+    out = writers.write_all([rec], str(tmp_path), {"citation_style": "gbt7714"})
+    bib = (out / "references.bib").read_text(encoding="utf-8")
+    assert "@article{Smith2026Reviewed" in bib
+    assert "Reviewed Paper" in bib
+    assert rec["tag"] == "Smith2026Reviewed"
+
+
 def test_copy_obsidian_notes(tmp_path):
     from pdf_manager import integrations
 
@@ -367,18 +398,29 @@ def test_obsidian_template_rendering(tmp_path):
     from pdf_manager import obsidian
 
     tpl = tmp_path / "template.md"
-    tpl.write_text("# {title}\n{authors}\n{citation}\n{place}\n", encoding="utf-8")
+    tpl.write_text(
+        "# {title}\n{authors}\n{citation}\n{place}\n"
+        "{zotero_key}\n{citation_gbt}\n{citation_ieee}\n{school}\n{thesis_type}\n{advisor}\n",
+        encoding="utf-8",
+    )
     rec = {
         "bibtex_key": "Smith2024",
         "title": "A Great Paper",
         "authors": ["Alice Smith"],
         "citation": "Alice Smith. A Great Paper[J]. 2024.",
+        "venue": "Space University",
         "place": "Beijing",
+        "thesis_type": "doctoral",
+        "advisor": "Bob Lee",
     }
     note = obsidian.generate_note(rec, {"obsidian_note_template": str(tpl), "citation_style": "gbt7714"})
     assert "# A Great Paper" in note
     assert "Alice Smith" in note
     assert "Beijing" in note
+    assert "Smith2024" in note
+    assert "Space University" in note
+    assert "doctoral" in note
+    assert "Bob Lee" in note
 
 
 def test_rename_log_and_undo(tmp_path):

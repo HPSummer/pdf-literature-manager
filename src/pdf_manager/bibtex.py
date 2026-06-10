@@ -51,7 +51,9 @@ def _entry_type(rec: dict) -> str:
 
 def generate(rec: dict) -> tuple[str, str]:
     entry_type = _entry_type(rec)
-    key = _make_key(rec)
+    key = str(rec.get("bibtex_key") or "").strip()
+    if not key:
+        key = _make_key(rec)
 
     fields: list[str] = []
 

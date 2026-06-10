@@ -345,6 +345,232 @@ class BatchReviewDialog(tk.Toplevel):
         self.destroy()
 
 
+class ZoteroImportPrompt(tk.Toplevel):
+    def __init__(self, master: "App", summary: dict, report: Path):
+        super().__init__(master)
+        self.title("Zotero 导入检查")
+        self.geometry("560x260")
+        self.resizable(False, False)
+        self.transient(master)
+        self.grab_set()
+        self.result: str | None = None
+        root = ttk.Frame(self, padding=16)
+        root.grid(row=0, column=0, sticky="nsew")
+        self.columnconfigure(0, weight=1)
+        root.columnconfigure(0, weight=1)
+        ttk.Label(root, text="Zotero 导出检查", style="Section.TLabel").grid(row=0, column=0, sticky="w")
+        text = (
+            f"本次 Zotero 将导入 {summary['citable']}/{summary['total']} 条文献；"
+            f"跳过 {summary['omitted']} 条。\n\n"
+            "跳过项通常是待复核、unknown、document、缺 DOI 或缺作者的记录。"
+            "建议先打开待复核面板修正，再重新导出。\n\n"
+            f"报告文件：{report}"
+        )
+        ttk.Label(root, text=text, wraplength=520, justify=tk.LEFT).grid(row=1, column=0, sticky="ew", pady=(10, 12))
+        buttons = ttk.Frame(root)
+        buttons.grid(row=2, column=0, sticky="e")
+        for label, result, style in (
+            ("打开待复核面板", "review", "Accent.TButton"),
+            ("打开报告", "report", "Toolbutton.TButton"),
+            ("继续导入", "continue", "Primary.TButton"),
+            ("取消", "cancel", "Toolbutton.TButton"),
+        ):
+            ttk.Button(buttons, text=label, style=style, command=lambda r=result: self._choose(r)).pack(
+                side=tk.LEFT, padx=(8, 0)
+            )
+        self.protocol("WM_DELETE_WINDOW", lambda: self._choose("cancel"))
+
+    def _choose(self, result: str):
+        self.result = result
+        self.destroy()
+
+
+class ZoteroReviewDialog(tk.Toplevel):
+    FILTERS = {
+        "全部跳过项": "all",
+        "unknown": "unknown",
+        "document": "document",
+        "needs_review": "needs_review",
+        "缺 DOI": "missing_doi",
+        "缺作者": "missing_authors",
+    }
+
+    def __init__(self, master: "App"):
+        super().__init__(master)
+        self.title("Zotero 导出检查 / 待复核")
+        self.geometry("960x560")
+        self.minsize(820, 460)
+        self.transient(master)
+        self.grab_set()
+        self._master = master
+        self._filter_var = tk.StringVar(value="全部跳过项")
+        self._build()
+        self._refresh()
+
+    def _build(self):
+        root = ttk.Frame(self, padding=14)
+        root.grid(row=0, column=0, sticky="nsew")
+        self.columnconfigure(0, weight=1)
+        self.rowconfigure(0, weight=1)
+        root.columnconfigure(0, weight=1)
+        root.rowconfigure(2, weight=1)
+
+        self._summary_var = tk.StringVar()
+        ttk.Label(root, textvariable=self._summary_var, style="Section.TLabel").grid(row=0, column=0, sticky="w")
+
+        tools = ttk.Frame(root)
+        tools.grid(row=1, column=0, sticky="ew", pady=(10, 8))
+        ttk.Label(tools, text="筛选", style="Muted.TLabel").pack(side=tk.LEFT)
+        combo = ttk.Combobox(
+            tools,
+            textvariable=self._filter_var,
+            values=list(self.FILTERS),
+            state="readonly",
+            width=18,
+        )
+        combo.pack(side=tk.LEFT, padx=(6, 12))
+        combo.bind("<<ComboboxSelected>>", lambda _e: self._refresh())
+        ttk.Button(tools, text="标为 paper", command=lambda: self._apply_type("paper")).pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Button(tools, text="标为 thesis", command=lambda: self._apply_type("thesis")).pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Button(tools, text="清除待复核", command=self._clear_review).pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Button(tools, text="重新导出", style="Primary.TButton", command=self._export).pack(side=tk.RIGHT)
+        ttk.Button(tools, text="打开报告", command=self._open_report).pack(side=tk.RIGHT, padx=(0, 8))
+
+        cols = ("file", "type", "review", "doi", "authors", "reason", "title")
+        self._tree = ttk.Treeview(root, columns=cols, show="headings", selectmode="extended")
+        labels = {
+            "file": "文件",
+            "type": "类型",
+            "review": "复核",
+            "doi": "DOI",
+            "authors": "作者",
+            "reason": "跳过原因",
+            "title": "标题",
+        }
+        widths = {"file": 170, "type": 80, "review": 60, "doi": 150, "authors": 130, "reason": 220, "title": 240}
+        for col in cols:
+            self._tree.heading(col, text=labels[col])
+            self._tree.column(col, width=widths[col], anchor=tk.W)
+        self._tree.grid(row=2, column=0, sticky="nsew")
+        yscroll = ttk.Scrollbar(root, orient=tk.VERTICAL, command=self._tree.yview)
+        self._tree.configure(yscrollcommand=yscroll.set)
+        yscroll.grid(row=2, column=1, sticky="ns")
+
+        bottom = ttk.Frame(root)
+        bottom.grid(row=3, column=0, sticky="ew", pady=(10, 0))
+        ttk.Label(
+            bottom,
+            text="提示：只有 paper/thesis 会写入 Zotero RIS/BibTeX；修改后请重新导出。",
+            style="Muted.TLabel",
+        ).pack(side=tk.LEFT)
+        ttk.Button(bottom, text="关闭", command=self.destroy).pack(side=tk.RIGHT)
+
+    def _refresh(self):
+        for item in self._tree.get_children():
+            self._tree.delete(item)
+        summary = self._summary()
+        self._summary_var.set(
+            f"total {summary['total']} | 可导入 {summary['citable']} | skipped {summary['omitted']}"
+        )
+        for iid, rec in self._filtered_rows():
+            self._tree.insert("", tk.END, iid=iid, values=(
+                rec.get("original_filename", ""),
+                rec.get("detected_type", ""),
+                "yes" if rec.get("needs_review") else "no",
+                rec.get("doi") or "",
+                _authors_to_text(rec.get("authors")),
+                self._skip_reason(rec),
+                rec.get("title") or rec.get("tag") or "",
+            ))
+
+    def _summary(self) -> dict:
+        from pdf_manager import integrations
+
+        return integrations.zotero_export_summary(self._master._records)
+
+    def _skipped_rows(self) -> list[tuple[str, dict]]:
+        return [
+            (iid, rec)
+            for iid, rec in self._master._row_by_file.items()
+            if rec.get("detected_type") not in {"paper", "thesis"}
+        ]
+
+    def _filtered_rows(self) -> list[tuple[str, dict]]:
+        mode = self.FILTERS.get(self._filter_var.get(), "all")
+        rows = self._skipped_rows()
+        if mode == "unknown":
+            return [(iid, rec) for iid, rec in rows if rec.get("detected_type") == "unknown"]
+        if mode == "document":
+            return [(iid, rec) for iid, rec in rows if rec.get("detected_type") == "document"]
+        if mode == "needs_review":
+            return [(iid, rec) for iid, rec in rows if rec.get("needs_review")]
+        if mode == "missing_doi":
+            return [(iid, rec) for iid, rec in rows if not rec.get("doi")]
+        if mode == "missing_authors":
+            return [(iid, rec) for iid, rec in rows if not rec.get("authors")]
+        return rows
+
+    def _selected_records(self) -> list[tuple[str, dict]]:
+        selected = self._tree.selection()
+        if selected:
+            return [(iid, self._master._row_by_file[iid]) for iid in selected if iid in self._master._row_by_file]
+        return self._filtered_rows()
+
+    def _apply_type(self, detected_type: str):
+        rows = self._selected_records()
+        if not rows:
+            messagebox.showinfo("没有记录", "当前筛选下没有可修改记录。")
+            return
+        for iid, rec in rows:
+            rec["detected_type"] = detected_type
+            rec["needs_review"] = False
+            rec["_suggested_name"] = None
+            self._master._refresh_row(iid)
+        self._master._update_summary()
+        self._refresh()
+        self._master._status_var.set(f"Zotero 复核：已标为 {detected_type} {len(rows)} 条")
+
+    def _clear_review(self):
+        rows = self._selected_records()
+        if not rows:
+            messagebox.showinfo("没有记录", "当前筛选下没有可修改记录。")
+            return
+        for iid, rec in rows:
+            rec["needs_review"] = False
+            self._master._refresh_row(iid)
+        self._master._update_summary()
+        self._refresh()
+        self._master._status_var.set(f"Zotero 复核：已清除待复核 {len(rows)} 条")
+
+    def _export(self) -> Path | None:
+        out = self._master._write_current_export()
+        if out:
+            self._refresh()
+            messagebox.showinfo("重新导出完成", f"Zotero RIS/BibTeX 和报告已更新：\n{out}")
+        return out
+
+    def _open_report(self):
+        out = self._master._write_current_export()
+        if not out:
+            return
+        report = out / "zotero_import_report.md"
+        try:
+            os.startfile(str(report))
+        except Exception as exc:
+            messagebox.showerror("打开失败", f"请手动打开：\n{report}\n\n{exc}")
+
+    def _skip_reason(self, rec: dict) -> str:
+        if rec.get("error"):
+            return "processing error"
+        if rec.get("needs_review"):
+            return "needs_review"
+        if not rec.get("doi"):
+            return "missing DOI"
+        if not rec.get("authors"):
+            return "missing authors"
+        return f"classified as {rec.get('detected_type') or 'unknown'}"
+
+
 class DuplicateDialog(tk.Toplevel):
     def __init__(self, master: "App"):
         super().__init__(master)
@@ -579,6 +805,7 @@ class App(tk.Tk):
             ("批量复核", self._open_batch_review_dialog, "Toolbutton.TButton"),
             ("重复合并", self._open_duplicate_dialog, "Toolbutton.TButton"),
             ("打开输出目录", self._open_output, "Toolbutton.TButton"),
+            ("Zotero 检查", self._open_zotero_review_dialog, "Toolbutton.TButton"),
             ("导入 Zotero", self._import_zotero, "Toolbutton.TButton"),
             ("导入 Obsidian", self._import_obsidian, "Toolbutton.TButton"),
         ]
@@ -927,19 +1154,25 @@ class App(tk.Tk):
             messagebox.showerror("加载失败", str(exc))
 
     def _export(self):
+        out = self._write_current_export()
+        if out:
+            messagebox.showinfo("导出完成", f"索引、引用、BibTeX、Obsidian 笔记和 session.json 已输出到：\n{out}")
+            self._status_var.set(f"已导出：{out}")
+
+    def _write_current_export(self) -> Path | None:
         scan_dir = self._dir_var.get().strip()
         if not scan_dir or not self._records:
             messagebox.showinfo("没有可导出内容", "请先扫描或加载上次结果。")
-            return
+            return None
         try:
             from pdf_manager import writers
 
             out = writers.write_all(self._records, scan_dir, self._cfg())
             self._last_output = out
-            messagebox.showinfo("导出完成", f"索引、引用、BibTeX、Obsidian 笔记和 session.json 已输出到：\n{out}")
-            self._status_var.set(f"已导出：{out}")
+            return out
         except Exception as exc:
             messagebox.showerror("导出失败", str(exc))
+            return None
 
     def _ensure_export(self) -> Path | None:
         scan_dir = self._dir_var.get().strip()
@@ -952,18 +1185,10 @@ class App(tk.Tk):
         if not self._records:
             messagebox.showinfo("没有可导入内容", "请先扫描或加载上次结果。")
             return None
-        try:
-            from pdf_manager import writers
-
-            out = writers.write_all(self._records, scan_dir, self._cfg())
-            self._last_output = out
-            return out
-        except Exception as exc:
-            messagebox.showerror("导出失败", str(exc))
-            return None
+        return self._write_current_export()
 
     def _import_zotero(self):
-        out = self._ensure_export()
+        out = self._write_current_export()
         if not out:
             return
         from pdf_manager import integrations
@@ -972,17 +1197,21 @@ class App(tk.Tk):
         ris = out / "references.ris"
         bib = out / "references.bib"
         target = ris if ris.exists() and ris.stat().st_size else bib
-        if not target.exists():
-            messagebox.showinfo("没有可导入文献", "当前结果中没有论文或学位论文。")
-            return
         if summary["omitted"]:
             report = out / "zotero_import_report.md"
-            messagebox.showwarning(
-                "Zotero 导入不完整提示",
-                f"Zotero 将导入 {summary['citable']}/{summary['total']} 条文献。\n"
-                f"其余 {summary['omitted']} 条被识别为待复核、unknown 或普通 PDF，已写入：\n{report}\n\n"
-                "请用“批量复核”把应进入文献库的条目标为 paper/thesis 后重新导出。",
-            )
+            prompt = ZoteroImportPrompt(self, summary, report)
+            self.wait_window(prompt)
+            if prompt.result == "review":
+                self._open_zotero_review_dialog()
+                return
+            if prompt.result == "report":
+                self._open_zotero_report(out)
+                return
+            if prompt.result != "continue":
+                return
+        if not target.exists() or not target.stat().st_size:
+            messagebox.showinfo("没有可导入文献", "当前结果中没有论文或学位论文。请先在 Zotero 检查面板中复核 skipped 条目。")
+            return
         try:
             os.startfile(str(target))
             self._status_var.set(f"已打开 Zotero 导入文件：{target.name}")
@@ -990,7 +1219,7 @@ class App(tk.Tk):
             messagebox.showerror("打开失败", f"请在 Zotero 中手动导入：\n{target}\n\n{exc}")
 
     def _import_obsidian(self):
-        out = self._ensure_export()
+        out = self._write_current_export()
         if not out:
             return
         vault = filedialog.askdirectory(title="选择 Obsidian Vault 根目录")
@@ -1005,6 +1234,23 @@ class App(tk.Tk):
             self._status_var.set(f"已导入 Obsidian：{count} 篇笔记")
         except Exception as exc:
             messagebox.showerror("导入 Obsidian 失败", str(exc))
+
+    def _open_zotero_review_dialog(self):
+        if not self._records:
+            messagebox.showinfo("没有记录", "请先扫描或加载上次结果。")
+            return
+        ZoteroReviewDialog(self)
+
+    def _open_zotero_report(self, out: Path | None = None):
+        target = out or self._write_current_export()
+        if not target:
+            return
+        report = target / "zotero_import_report.md"
+        try:
+            os.startfile(str(report))
+            self._status_var.set(f"已打开 Zotero 导入报告：{report.name}")
+        except Exception as exc:
+            messagebox.showerror("打开失败", f"请手动打开：\n{report}\n\n{exc}")
 
     def _open_batch_review_dialog(self):
         rows = self._selected_rows()

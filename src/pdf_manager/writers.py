@@ -21,7 +21,7 @@ def _detect_duplicates(records: list[dict]) -> list[dict]:
 
 
 def write_all(records: list[dict], scan_dir: str, cfg: dict) -> Path:
-    from pdf_manager import citation, integrations
+    from pdf_manager import bibtex, citation, integrations
     from pdf_manager import obsidian as obs_mod
 
     out = Path(scan_dir) / "_pdf_manager_output"
@@ -33,8 +33,13 @@ def write_all(records: list[dict], scan_dir: str, cfg: dict) -> Path:
 
     papers = [r for r in records if r.get("detected_type") in {"paper", "thesis"}]
     for rec in papers:
+        if not rec.get("_bibtex_entry"):
+            key, bib_entry = bibtex.generate(rec)
+            rec["bibtex_key"] = key
+            rec["_bibtex_entry"] = bib_entry
         rec["ieee_citation"] = rec.get("ieee_citation") or citation.generate(rec, "ieee")
         rec["citation"] = citation.generate(rec, style)
+        rec["tag"] = rec.get("tag") or rec.get("bibtex_key")
     review = [r for r in records if r.get("needs_review")]
     errors = [r for r in records if r.get("error")]
 
