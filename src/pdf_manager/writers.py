@@ -9,45 +9,15 @@ _RECORD_FIELDS = [
     "original_filename", "absolute_path", "relative_path", "file_size", "page_count",
     "detected_type", "confidence", "title", "authors", "year", "venue", "volume",
     "issue", "pages", "doi", "arxiv_id", "url", "publisher", "citation", "ieee_citation",
-    "bibtex_key", "tag", "duplicate_group", "needs_review", "classification_reason",
-    "thesis_type", "notes", "error",
+    "bibtex_key", "tag", "duplicate_group", "merged_into", "needs_review", "classification_reason",
+    "thesis_type", "place", "advisor", "notes", "error",
 ]
 
 
 def _detect_duplicates(records: list[dict]) -> list[dict]:
-    import re
-    seen_doi: dict[str, str] = {}
-    seen_title: dict[str, str] = {}
+    from pdf_manager import duplicates
 
-    def norm_title(t: str) -> str:
-        return re.sub(r"[^a-z0-9]", "", (t or "").lower())
-
-    for rec in records:
-        doi = rec.get("doi")
-        title = rec.get("title") or ""
-        year = rec.get("year") or ""
-        if doi:
-            if doi in seen_doi:
-                rec["duplicate_group"] = doi
-                for r in records:
-                    if r.get("doi") == doi and not r.get("duplicate_group"):
-                        r["duplicate_group"] = doi
-            else:
-                seen_doi[doi] = rec.get("bibtex_key", "")
-        else:
-            nt = norm_title(title)
-            key = nt[:40] + year if nt else ""
-            if key and key in seen_title:
-                grp = f"dup_{nt[:20]}"
-                rec["duplicate_group"] = grp
-                for r in records:
-                    nt2 = norm_title(r.get("title") or "")
-                    k2 = nt2[:40] + (r.get("year") or "")
-                    if k2 == key and not r.get("duplicate_group"):
-                        r["duplicate_group"] = grp
-            elif key:
-                seen_title[key] = rec.get("bibtex_key", "")
-    return records
+    return duplicates.mark_duplicates(records)
 
 
 def write_all(records: list[dict], scan_dir: str, cfg: dict) -> Path:
@@ -130,6 +100,8 @@ def write_all(records: list[dict], scan_dir: str, cfg: dict) -> Path:
             "output_obsidian_notes": cfg.get("output_obsidian_notes", True),
             "recursive": cfg.get("recursive", False),
             "enable_network": cfg.get("enable_network", True),
+            "obsidian_literature_dir": cfg.get("obsidian_literature_dir", "02_literature"),
+            "obsidian_note_template": cfg.get("obsidian_note_template", ""),
         },
         "records": serializable,
     }
@@ -142,6 +114,25 @@ def write_all(records: list[dict], scan_dir: str, cfg: dict) -> Path:
         for rec in review:
             reason = rec.get("classification_reason") or ""
             f.write(f"- {rec.get('original_filename','')} (confidence={rec.get('confidence','')}; {reason})\n")
+
+    # duplicate groups
+    with open(out / "duplicates.md", "w", encoding="utf-8") as f:
+        f.write("# Duplicate Groups\n\n")
+        groups: dict[str, list[dict]] = {}
+        for rec in records:
+            if rec.get("duplicate_group"):
+                groups.setdefault(rec["duplicate_group"], []).append(rec)
+        if not groups:
+            f.write("No duplicates detected.\n")
+        for key, items in groups.items():
+            f.write(f"## {key}\n\n")
+            f.write("| File | Title | DOI | Merged into |\n|---|---|---|---|\n")
+            for rec in items:
+                f.write(
+                    f"| {rec.get('original_filename','')} | {rec.get('title','')} | "
+                    f"{rec.get('doi','')} | {rec.get('merged_into','')} |\n"
+                )
+            f.write("\n")
 
     # errors.log
     with open(out / "errors.log", "w", encoding="utf-8") as f:

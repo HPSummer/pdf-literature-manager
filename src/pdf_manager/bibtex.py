@@ -1,5 +1,6 @@
 import re
 import unicodedata
+import hashlib
 
 _used_keys: set[str] = set()
 
@@ -20,7 +21,12 @@ def _make_key(rec: dict) -> str:
     year = rec.get("year") or ""
     title = rec.get("title") or ""
     first_word = _ascii_clean(title.split()[0]) if title.split() else ""
-    base = f"{first_last}{year}{first_word}" or "unknown"
+    base = f"{first_last}{year}{first_word}"
+    if not re.search(r"[A-Za-z]", base):
+        raw = "|".join([title, year, ";".join(authors), rec.get("doi") or rec.get("original_filename") or ""])
+        digest = hashlib.sha1(raw.encode("utf-8", errors="ignore")).hexdigest()[:8]
+        base = f"ref{year or 'nd'}_{digest}"
+    base = base or "unknown"
     key = base
     suffix_idx = ord("b")
     while key in _used_keys:
@@ -60,6 +66,8 @@ def generate(rec: dict) -> tuple[str, str]:
     venue = rec.get("venue")
     if entry_type in {"mastersthesis", "phdthesis"}:
         add("school", venue)
+        add("address", rec.get("place"))
+        add("advisor", rec.get("advisor"))
     elif entry_type == "article":
         add("journal", venue)
     elif entry_type == "inproceedings":

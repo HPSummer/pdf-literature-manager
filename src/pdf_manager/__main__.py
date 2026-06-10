@@ -60,10 +60,13 @@ def main():
             "arxiv_id": None,
             "url": None,
             "publisher": None,
+            "place": None,
+            "advisor": None,
             "ieee_citation": None,
             "bibtex_key": None,
             "tag": path.stem,
             "duplicate_group": None,
+            "merged_into": None,
             "needs_review": False,
             "classification_reason": None,
             "thesis_type": None,
@@ -87,7 +90,7 @@ def main():
             rec["thesis_type"] = cls.get("thesis_type")
 
             meta = metadata.fetch(ext, cfg)
-            for k in ("title", "authors", "year", "venue", "volume", "issue", "pages", "publisher"):
+            for k in ("title", "authors", "year", "venue", "volume", "issue", "pages", "publisher", "place", "advisor"):
                 if meta.get(k):
                     rec[k] = meta[k]
             if meta.get("summary"):

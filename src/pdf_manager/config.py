@@ -14,6 +14,8 @@ DEFAULTS = {
     "review_confidence_threshold": 0.45,
     "crossref_mailto": "",
     "obsidian_links": ["trajectory_optimization_kb", "02_literature"],
+    "obsidian_literature_dir": "02_literature",
+    "obsidian_note_template": "",
 }
 
 

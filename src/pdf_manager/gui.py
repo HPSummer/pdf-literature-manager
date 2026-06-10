@@ -171,7 +171,9 @@ class ReviewDialog(tk.Toplevel):
             ("title", "标题", tk.StringVar(value=self._rec.get("title") or "")),
             ("authors", "作者（分号分隔）", tk.StringVar(value=_authors_to_text(self._rec.get("authors")))),
             ("year", "年份", tk.StringVar(value=self._rec.get("year") or "")),
-            ("venue", "期刊 / 会议", tk.StringVar(value=self._rec.get("venue") or "")),
+            ("venue", "期刊 / 会议 / 学校", tk.StringVar(value=self._rec.get("venue") or "")),
+            ("place", "地点", tk.StringVar(value=self._rec.get("place") or "")),
+            ("advisor", "导师", tk.StringVar(value=self._rec.get("advisor") or "")),
             ("doi", "DOI", tk.StringVar(value=self._rec.get("doi") or "")),
             ("arxiv_id", "arXiv", tk.StringVar(value=self._rec.get("arxiv_id") or "")),
             ("tag", "Tag / citekey", tk.StringVar(value=self._rec.get("tag") or "")),
@@ -229,6 +231,8 @@ class ReviewDialog(tk.Toplevel):
         rec["authors"] = _authors_from_text(self._vars["authors"].get())
         rec["year"] = self._vars["year"].get().strip()
         rec["venue"] = self._vars["venue"].get().strip()
+        rec["place"] = self._vars["place"].get().strip()
+        rec["advisor"] = self._vars["advisor"].get().strip()
         rec["doi"] = self._vars["doi"].get().strip()
         rec["arxiv_id"] = self._vars["arxiv_id"].get().strip()
         rec["tag"] = self._vars["tag"].get().strip()
@@ -271,6 +275,132 @@ class ReviewDialog(tk.Toplevel):
         self._master._refresh_row(self._item)
         self._master._update_summary()
         self._master._update_detail()
+        self.destroy()
+
+
+class BatchReviewDialog(tk.Toplevel):
+    def __init__(self, master: "App", rows: list[tuple[str, dict, tuple]]):
+        super().__init__(master)
+        self.title("批量复核")
+        self.geometry("520x360")
+        self.transient(master)
+        self.grab_set()
+        self._master = master
+        self._rows = rows
+        self._vars: dict[str, tk.Variable] = {}
+        self._build()
+
+    def _build(self):
+        root = ttk.Frame(self, padding=14)
+        root.grid(row=0, column=0, sticky="nsew")
+        root.columnconfigure(1, weight=1)
+        self.columnconfigure(0, weight=1)
+        ttk.Label(root, text=f"将修改 {len(self._rows)} 条勾选记录", style="Section.TLabel").grid(
+            row=0, column=0, columnspan=2, sticky="w", pady=(0, 10)
+        )
+        fields = [
+            ("detected_type", "类型", ["不修改", "paper", "thesis", "document", "unknown"]),
+            ("thesis_type", "学位类型", ["不修改", "", "master", "doctoral", "unknown"]),
+        ]
+        row = 1
+        for key, label, values in fields:
+            ttk.Label(root, text=label).grid(row=row, column=0, sticky="w", pady=5)
+            var = tk.StringVar(value="不修改")
+            ttk.Combobox(root, textvariable=var, values=values, state="readonly").grid(row=row, column=1, sticky="ew", pady=5)
+            self._vars[key] = var
+            row += 1
+        for key, label in (("year", "年份"), ("venue", "学校 / 期刊"), ("place", "地点"), ("advisor", "导师")):
+            ttk.Label(root, text=label).grid(row=row, column=0, sticky="w", pady=5)
+            var = tk.StringVar()
+            ttk.Entry(root, textvariable=var).grid(row=row, column=1, sticky="ew", pady=5)
+            self._vars[key] = var
+            row += 1
+        clear_review = tk.BooleanVar(value=True)
+        self._vars["clear_review"] = clear_review
+        ttk.Checkbutton(root, text="保存后清除待复核标记", variable=clear_review).grid(
+            row=row, column=1, sticky="w", pady=5
+        )
+        buttons = ttk.Frame(root)
+        buttons.grid(row=row + 1, column=0, columnspan=2, sticky="e", pady=(12, 0))
+        ttk.Button(buttons, text="应用", command=self._apply).pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Button(buttons, text="取消", command=self.destroy).pack(side=tk.LEFT)
+
+    def _apply(self):
+        for item, rec, _values in self._rows:
+            dtype = self._vars["detected_type"].get()
+            if dtype != "不修改":
+                rec["detected_type"] = dtype
+            ttype = self._vars["thesis_type"].get()
+            if ttype != "不修改":
+                rec["thesis_type"] = ttype or None
+            for key in ("year", "venue", "place", "advisor"):
+                val = self._vars[key].get().strip()
+                if val:
+                    rec[key] = val
+            if self._vars["clear_review"].get():
+                rec["needs_review"] = False
+            self._master._refresh_row(item)
+        self._master._update_summary()
+        self._master._status_var.set(f"批量复核完成：{len(self._rows)} 条")
+        self.destroy()
+
+
+class DuplicateDialog(tk.Toplevel):
+    def __init__(self, master: "App"):
+        super().__init__(master)
+        self.title("重复文献合并")
+        self.geometry("820x460")
+        self.transient(master)
+        self.grab_set()
+        self._master = master
+        self._build()
+
+    def _build(self):
+        from pdf_manager import duplicates
+
+        root = ttk.Frame(self, padding=14)
+        root.grid(row=0, column=0, sticky="nsew")
+        self.columnconfigure(0, weight=1)
+        self.rowconfigure(0, weight=1)
+        root.columnconfigure(0, weight=1)
+        root.rowconfigure(1, weight=1)
+        ttk.Label(root, text="重复组：保留信息最完整的一条，其余标记为已合并候选。", style="Section.TLabel").grid(
+            row=0, column=0, sticky="w", pady=(0, 8)
+        )
+        cols = ("group", "file", "title", "doi", "keep")
+        tree = ttk.Treeview(root, columns=cols, show="headings")
+        labels = {"group": "重复组", "file": "文件", "title": "标题", "doi": "DOI", "keep": "保留"}
+        widths = {"group": 180, "file": 170, "title": 260, "doi": 140, "keep": 70}
+        for col in cols:
+            tree.heading(col, text=labels[col])
+            tree.column(col, width=widths[col], anchor=tk.W)
+        tree.grid(row=1, column=0, sticky="nsew")
+        groups = duplicates.build_groups(self._master._records)
+        for group in groups:
+            primary = duplicates.choose_primary(group["records"])
+            for rec in group["records"]:
+                tree.insert("", tk.END, values=(
+                    group["key"],
+                    rec.get("original_filename", ""),
+                    rec.get("title", ""),
+                    rec.get("doi", ""),
+                    "是" if rec is primary else "",
+                ))
+        if not groups:
+            tree.insert("", tk.END, values=("", "未检测到重复文献", "", "", ""))
+        buttons = ttk.Frame(root)
+        buttons.grid(row=2, column=0, sticky="e", pady=(10, 0))
+        ttk.Button(buttons, text="应用合并标记", command=self._apply_merge_marks).pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Button(buttons, text="关闭", command=self.destroy).pack(side=tk.LEFT)
+
+    def _apply_merge_marks(self):
+        from pdf_manager import duplicates
+
+        duplicates.mark_duplicates(self._master._records)
+        for item, rec in self._master._row_by_file.items():
+            self._master._refresh_row(item)
+        self._master._update_summary()
+        self._master._status_var.set("重复文献合并标记已应用")
         self.destroy()
 
 
@@ -393,6 +523,8 @@ class App(tk.Tk):
         self._network_var = tk.BooleanVar(value=True)
         self._obsidian_var = tk.BooleanVar(value=True)
         self._style_var = tk.StringVar(value="GB/T 7714")
+        self._obsidian_dir_var = tk.StringVar(value="02_literature")
+        self._obsidian_template_var = tk.StringVar(value="")
         ttk.Checkbutton(options, text="递归子目录", variable=self._recursive_var).pack(side=tk.LEFT)
         ttk.Checkbutton(options, text="联网补全 DOI / arXiv", variable=self._network_var).pack(side=tk.LEFT, padx=(18, 0))
         ttk.Checkbutton(options, text="生成 Obsidian 文献笔记", variable=self._obsidian_var).pack(side=tk.LEFT, padx=(18, 0))
@@ -400,8 +532,17 @@ class App(tk.Tk):
         ttk.Combobox(options, textvariable=self._style_var, values=list(STYLE_OPTIONS), state="readonly", width=12).pack(side=tk.LEFT)
         ttk.Label(options, text="默认按 GB/T 7714 引用格式命名，待复核项不会被静默当作论文处理。", style="Muted.TLabel").pack(side=tk.RIGHT)
 
+        obsidian_opts = ttk.Frame(shell, style="Surface.TFrame")
+        obsidian_opts.grid(row=3, column=0, columnspan=4, sticky="ew", pady=(10, 0))
+        obsidian_opts.columnconfigure(3, weight=1)
+        ttk.Label(obsidian_opts, text="Obsidian 目录", style="Muted.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Entry(obsidian_opts, textvariable=self._obsidian_dir_var, width=18).grid(row=0, column=1, sticky="w", padx=(6, 18))
+        ttk.Label(obsidian_opts, text="模板", style="Muted.TLabel").grid(row=0, column=2, sticky="w")
+        ttk.Entry(obsidian_opts, textvariable=self._obsidian_template_var).grid(row=0, column=3, sticky="ew", padx=(6, 8))
+        ttk.Button(obsidian_opts, text="选择模板", command=self._browse_obsidian_template).grid(row=0, column=4, sticky="e")
+
         self._progress = ttk.Progressbar(shell, mode="determinate")
-        self._progress.grid(row=3, column=0, columnspan=4, sticky="ew", pady=(12, 0))
+        self._progress.grid(row=4, column=0, columnspan=4, sticky="ew", pady=(12, 0))
 
     def _build_table(self):
         body = ttk.Frame(self, style="Surface.TFrame", padding=(14, 12))
@@ -434,6 +575,9 @@ class App(tk.Tk):
         secondary_buttons = [
             ("重命名计划", self._write_rename_plan, "Toolbutton.TButton"),
             ("应用重命名", self._apply_rename, "Danger.TButton"),
+            ("撤销重命名", self._undo_rename, "Toolbutton.TButton"),
+            ("批量复核", self._open_batch_review_dialog, "Toolbutton.TButton"),
+            ("重复合并", self._open_duplicate_dialog, "Toolbutton.TButton"),
             ("打开输出目录", self._open_output, "Toolbutton.TButton"),
             ("导入 Zotero", self._import_zotero, "Toolbutton.TButton"),
             ("导入 Obsidian", self._import_obsidian, "Toolbutton.TButton"),
@@ -497,7 +641,17 @@ class App(tk.Tk):
             "output_ieee": True,
             "citation_style": STYLE_OPTIONS.get(self._style_var.get(), "gbt7714"),
             "obsidian_links": ["trajectory_optimization_kb", "02_literature"],
+            "obsidian_literature_dir": self._obsidian_dir_var.get().strip() or "02_literature",
+            "obsidian_note_template": self._obsidian_template_var.get().strip(),
         }
+
+    def _browse_obsidian_template(self):
+        selected = filedialog.askopenfilename(
+            title="选择 Obsidian 笔记模板",
+            filetypes=[("Markdown", "*.md"), ("Text", "*.txt"), ("All files", "*.*")],
+        )
+        if selected:
+            self._obsidian_template_var.set(selected)
 
     def _start_scan(self):
         scan_dir = self._dir_var.get().strip()
@@ -539,7 +693,7 @@ class App(tk.Tk):
                 rec["classification_reason"] = cls.get("classification_reason")
                 rec["thesis_type"] = cls.get("thesis_type")
                 meta = metadata.fetch(ext, cfg)
-                for key in ("title", "authors", "year", "venue", "volume", "issue", "pages", "publisher"):
+                for key in ("title", "authors", "year", "venue", "volume", "issue", "pages", "publisher", "place", "advisor"):
                     if meta.get(key):
                         rec[key] = meta[key]
                 if meta.get("summary"):
@@ -584,11 +738,14 @@ class App(tk.Tk):
             "arxiv_id": None,
             "url": None,
             "publisher": None,
+            "place": None,
+            "advisor": None,
             "ieee_citation": None,
             "citation": None,
             "bibtex_key": None,
             "tag": path.stem,
             "duplicate_group": None,
+            "merged_into": None,
             "needs_review": False,
             "classification_reason": None,
             "thesis_type": None,
@@ -760,6 +917,8 @@ class App(tk.Tk):
             self._recursive_var.set(bool(cfg.get("recursive", False)))
             self._network_var.set(bool(cfg.get("enable_network", True)))
             self._obsidian_var.set(bool(cfg.get("output_obsidian_notes", True)))
+            self._obsidian_dir_var.set(cfg.get("obsidian_literature_dir") or "02_literature")
+            self._obsidian_template_var.set(cfg.get("obsidian_note_template") or "")
             for rec in self._records:
                 self._add_row(rec)
             self._last_output = path.parent
@@ -845,11 +1004,31 @@ class App(tk.Tk):
         try:
             from pdf_manager import integrations
 
-            count = integrations.copy_obsidian_notes(out, Path(vault), "02_literature")
-            messagebox.showinfo("导入 Obsidian 完成", f"已复制 {count} 篇文献笔记到：\n{Path(vault) / '02_literature'}")
+            subdir = self._obsidian_dir_var.get().strip() or "02_literature"
+            count = integrations.copy_obsidian_notes(out, Path(vault), subdir)
+            messagebox.showinfo("导入 Obsidian 完成", f"已复制 {count} 篇文献笔记到：\n{Path(vault) / subdir}")
             self._status_var.set(f"已导入 Obsidian：{count} 篇笔记")
         except Exception as exc:
             messagebox.showerror("导入 Obsidian 失败", str(exc))
+
+    def _open_batch_review_dialog(self):
+        rows = self._selected_rows()
+        if not rows:
+            rows = [
+                (item, rec, self._tree.item(item, "values"))
+                for item, rec in self._row_by_file.items()
+                if rec.get("needs_review") or rec.get("detected_type") == "unknown"
+            ]
+        if not rows:
+            messagebox.showinfo("没有待复核记录", "请先勾选记录，或扫描出待复核 PDF。")
+            return
+        BatchReviewDialog(self, rows)
+
+    def _open_duplicate_dialog(self):
+        if not self._records:
+            messagebox.showinfo("没有记录", "请先扫描或加载上次结果。")
+            return
+        DuplicateDialog(self)
 
     def _write_rename_plan(self):
         scan_dir = self._dir_var.get().strip()
@@ -888,6 +1067,8 @@ class App(tk.Tk):
         if not messagebox.askyesno("确认重命名", f"即将重命名 {len(to_rename)} 个 PDF。\n建议先生成并复核 rename_plan.md。是否继续？"):
             return
         success = failed = skipped = 0
+        out = Path(self._dir_var.get().strip()) / OUTPUT_DIR_NAME
+        out.mkdir(parents=True, exist_ok=True)
         for item, rec, new_name in to_rename:
             src = Path(rec["absolute_path"])
             dst = src.parent / new_name
@@ -896,6 +1077,9 @@ class App(tk.Tk):
                 continue
             try:
                 src.rename(dst)
+                from pdf_manager import renamer
+
+                renamer.append_log(out, src, dst)
                 rec["original_filename"] = new_name
                 rec["absolute_path"] = str(dst.resolve())
                 try:
@@ -907,8 +1091,32 @@ class App(tk.Tk):
             except Exception as exc:
                 rec["error"] = str(exc)
                 failed += 1
+        try:
+            from pdf_manager import renamer
+
+            renamer.write_markdown_log(out)
+        except Exception:
+            pass
         self._status_var.set(f"重命名完成：成功 {success}，跳过 {skipped}，失败 {failed}")
         self._update_summary()
+
+    def _undo_rename(self):
+        scan_dir = self._dir_var.get().strip()
+        if not scan_dir:
+            messagebox.showinfo("未选择文件夹", "请先选择扫描文件夹。")
+            return
+        out = Path(scan_dir) / OUTPUT_DIR_NAME
+        try:
+            from pdf_manager import renamer
+
+            results = renamer.undo_last_batch(out)
+            undone = sum(1 for r in results if r.get("undo_status") == "undone")
+            blocked = len(results) - undone
+            renamer.write_markdown_log(out)
+            messagebox.showinfo("撤销重命名完成", f"已撤销 {undone} 个文件；跳过 {blocked} 个。")
+            self._status_var.set(f"撤销重命名：成功 {undone}，跳过 {blocked}")
+        except Exception as exc:
+            messagebox.showerror("撤销失败", str(exc))
 
     def _open_output(self):
         scan_dir = self._dir_var.get().strip()

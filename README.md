@@ -10,7 +10,10 @@ Windows 一键 PDF 文献管理工具，面向论文、硕士/博士学位论文
 - 支持 IEEE、APA、MLA、Chicago、GB/T 7714
 - 生成 `references.bib`、`references.ris`、Markdown 引用列表和 CSV/JSON 索引
 - 生成 Obsidian 文献笔记，并可一键复制到 vault 的 `02_literature`
+- 支持 Obsidian 笔记模板和目标子目录配置
 - 支持 Zotero、小绿鲸等文献管理软件导入 BibTeX/RIS
+- 支持批量复核、重复文献合并标记、重命名日志和撤销重命名
+- 增强中文学位论文元数据提取：题名、作者、导师、学校、地点、年份
 - 提供 GUI 和 CLI 两种使用方式
 
 ## GUI 使用
@@ -28,7 +31,9 @@ PDF文献管理器.exe
 3. 双击列表项复核题名、作者、年份、学校/期刊、硕博类型。
 4. 点击“导出索引 / 引用”。
 5. 需要重命名时先生成“重命名计划”，确认后再“应用重命名”。
-6. 使用“导入 Zotero”“导入 Obsidian”“导入小绿鲸”完成外部软件导入。
+6. 需要批量修正时使用“批量复核”；重复条目使用“重复合并”生成合并标记。
+7. 使用“导入 Zotero”“导入 Obsidian”“导入小绿鲸”完成外部软件导入。
+8. 重命名后可通过“撤销重命名”按日志恢复。
 
 ## CLI 使用
 
@@ -55,6 +60,8 @@ _pdf_manager_output/
 | `references.ris` | Zotero/小绿鲸兼容 RIS 导入文件 |
 | `obsidian_notes/` | Obsidian 文献笔记 |
 | `import_guide.md` | 第三方软件导入说明 |
+| `duplicates.md` | 重复文献分组与合并标记 |
+| `rename_log.jsonl` / `rename_log.md` | 重命名与撤销记录 |
 | `session.json` | GUI 可重新加载的扫描结果 |
 
 ## 开发
@@ -70,4 +77,3 @@ python -m venv .venv
 ```powershell
 .\build_exe.ps1
 ```
-

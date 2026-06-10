@@ -1,4 +1,12 @@
+from __future__ import annotations
+
 from datetime import date
+from pathlib import Path
+
+
+class _SafeDict(dict):
+    def __missing__(self, key):
+        return ""
 
 
 def generate_note(rec: dict, cfg: dict) -> str:
@@ -21,6 +29,28 @@ def generate_note(rec: dict, cfg: dict) -> str:
     style_label = citation.style_label(style)
     selected_citation = rec.get("citation") or citation.generate(rec, style)
     ieee_citation = rec.get("ieee_citation") or citation.generate(rec, "ieee")
+    context = _SafeDict({
+        "citekey": key,
+        "title": title,
+        "authors": authors_str,
+        "year": year,
+        "venue": venue,
+        "doi": doi,
+        "arxiv_id": arxiv_id,
+        "style": style,
+        "style_label": style_label,
+        "citation": selected_citation,
+        "ieee_citation": ieee_citation,
+        "summary": rec.get("summary") or rec.get("notes") or "",
+        "type": rec.get("detected_type") or "",
+        "thesis_type": rec.get("thesis_type") or "",
+        "place": rec.get("place") or "",
+        "advisor": rec.get("advisor") or "",
+        "date_added": today,
+    })
+    template = _load_template(cfg.get("obsidian_note_template"))
+    if template:
+        return template.format_map(context)
 
     lines = [
         "---",
@@ -67,3 +97,12 @@ def generate_note(rec: dict, cfg: dict) -> str:
         f"BibTeX key: `{key}`",
     ]
     return "\n".join(lines)
+
+
+def _load_template(template_ref: str | None) -> str:
+    if not template_ref:
+        return ""
+    p = Path(template_ref)
+    if p.exists():
+        return p.read_text(encoding="utf-8")
+    return str(template_ref)

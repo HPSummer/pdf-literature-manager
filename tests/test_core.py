@@ -162,6 +162,25 @@ def test_bibtex_thesis_entry_type():
     assert "@mastersthesis" in bib
 
 
+def test_bibtex_chinese_key_is_stable_and_useful():
+    reset_keys()
+    rec = {
+        "detected_type": "thesis",
+        "thesis_type": "doctoral",
+        "authors": ["张三"],
+        "title": "低推力轨迹优化方法研究",
+        "year": "2024",
+        "venue": "哈尔滨工业大学",
+        "place": "哈尔滨",
+        "advisor": "李四",
+    }
+    key, bib = bibtex.generate(rec)
+    assert key.startswith("ref2024_")
+    assert "@phdthesis" in bib
+    assert "address = {哈尔滨}" in bib
+    assert "advisor = {李四}" in bib
+
+
 # 6. Non-paper fallback tag is filename stem
 def test_non_paper_fallback_tag():
     rec = {"detected_type": "document", "tag": "my_document", "bibtex_key": None}
@@ -177,7 +196,20 @@ def test_duplicate_detection():
     ]
     result = _detect_duplicates(records)
     groups = [r.get("duplicate_group") for r in result]
-    assert groups[0] == groups[1] == "10.1/abc"
+    assert groups[0] == groups[1] == "doi:10.1/abc"
+
+
+def test_duplicate_merge_marks_primary():
+    from pdf_manager import duplicates
+
+    records = [
+        {"doi": "10.1/abc", "title": "T1", "year": "2020", "bibtex_key": "A"},
+        {"doi": "10.1/abc", "title": "T1", "year": "", "bibtex_key": ""},
+    ]
+    duplicates.mark_duplicates(records)
+    assert records[0]["duplicate_group"] == "doi:10.1/abc"
+    assert records[1]["merged_into"] == "A"
+    assert records[1]["needs_review"] is True
 
 
 # 8. Network failure fallback
@@ -195,6 +227,21 @@ def test_network_failure_fallback():
     assert result is not None
     assert "title" in result
     assert result.get("title") == "Fallback Title"
+
+
+def test_chinese_thesis_metadata_fallback():
+    extracted = {
+        "meta_title": None,
+        "meta_author": None,
+        "text": "\n低推力轨迹优化方法研究\n博士学位论文\n作者：张三\n导师：李四\n哈尔滨工业大学\n2024年\n摘要",
+    }
+    result = metadata.fetch(extracted, {"enable_network": False})
+    assert result["title"] == "低推力轨迹优化方法研究"
+    assert result["authors"] == ["张三"]
+    assert result["advisor"] == "李四"
+    assert result["venue"] == "哈尔滨工业大学"
+    assert result["place"] == "哈尔滨"
+    assert result["year"] == "2024"
 
 
 def test_selected_style_reference_output(tmp_path):
@@ -295,3 +342,37 @@ def test_copy_obsidian_notes(tmp_path):
     count = integrations.copy_obsidian_notes(out, vault)
     assert count == 1
     assert (vault / "02_literature" / "Smith2024Optimal.md").exists()
+
+
+def test_obsidian_template_rendering(tmp_path):
+    from pdf_manager import obsidian
+
+    tpl = tmp_path / "template.md"
+    tpl.write_text("# {title}\n{authors}\n{citation}\n{place}\n", encoding="utf-8")
+    rec = {
+        "bibtex_key": "Smith2024",
+        "title": "A Great Paper",
+        "authors": ["Alice Smith"],
+        "citation": "Alice Smith. A Great Paper[J]. 2024.",
+        "place": "Beijing",
+    }
+    note = obsidian.generate_note(rec, {"obsidian_note_template": str(tpl), "citation_style": "gbt7714"})
+    assert "# A Great Paper" in note
+    assert "Alice Smith" in note
+    assert "Beijing" in note
+
+
+def test_rename_log_and_undo(tmp_path):
+    from pdf_manager import renamer
+
+    out = tmp_path / "_pdf_manager_output"
+    old = tmp_path / "old.pdf"
+    new = tmp_path / "new.pdf"
+    old.write_text("pdf", encoding="utf-8")
+    old.rename(new)
+    renamer.append_log(out, old, new)
+    results = renamer.undo_last_batch(out)
+    assert results[0]["undo_status"] == "undone"
+    assert old.exists()
+    assert not new.exists()
+    assert (out / "rename_log.jsonl").exists()
