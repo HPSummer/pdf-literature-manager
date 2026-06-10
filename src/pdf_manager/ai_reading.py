@@ -152,6 +152,55 @@ def write_note(out_dir: Path, rec: dict, mode: str, model: str, base_url: str, c
     return path
 
 
+def write_batch_rough_report(out_dir: Path, rows: list[dict], model: str, base_url: str) -> Path:
+    notes_dir = out_dir / "ai_reading_notes"
+    notes_dir.mkdir(parents=True, exist_ok=True)
+    path = notes_dir / "batch_rough_reading.md"
+    lines = [
+        "---",
+        f"model: {_yaml_scalar(model)}",
+        f"base_url: {_yaml_scalar(_redact_base_url(base_url))}",
+        f"created_at: {_yaml_scalar(datetime.now().isoformat(timespec='seconds'))}",
+        "---",
+        "",
+        "# AI 批量粗读排序",
+        "",
+        "| Priority | Title | File | Note |",
+        "|---|---|---|---|",
+    ]
+    for row in rows:
+        lines.append(
+            f"| {_md_cell(row.get('priority') or '')} | "
+            f"{_md_cell(row.get('title') or '')} | "
+            f"{_md_cell(row.get('file') or '')} | "
+            f"{_md_cell(row.get('note') or '')} |"
+        )
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def heuristic_batch_rows(records: list[dict]) -> list[dict]:
+    rows = []
+    for rec in records:
+        if rec.get("detected_type") not in {"paper", "thesis"} or rec.get("needs_review"):
+            continue
+        text = " ".join(
+            str(rec.get(k) or "")
+            for k in ("title", "venue", "notes", "classification_reason")
+        ).lower()
+        high_terms = ("control", "trajectory", "optimization", "drag-free", "adrc", "rtbp", "低推力", "轨迹", "控制")
+        score = sum(1 for term in high_terms if term in text)
+        priority = "高" if score >= 2 else "中" if score == 1 else "低"
+        rows.append({
+            "priority": priority,
+            "title": rec.get("title") or rec.get("tag") or rec.get("original_filename"),
+            "file": rec.get("original_filename"),
+            "note": "启发式排序；可用 AI 阅读生成更细笔记。",
+        })
+    order = {"高": 0, "中": 1, "低": 2}
+    return sorted(rows, key=lambda r: order.get(r["priority"], 9))
+
+
 def resolve_api_key(env_name: str, temporary_key: str = "") -> str:
     return temporary_key.strip() or os.environ.get(env_name.strip() or "OPENAI_API_KEY", "").strip()
 
@@ -172,6 +221,10 @@ def _safe_name(text: str) -> str:
 def _yaml_scalar(value) -> str:
     text = str(value or "")
     return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _md_cell(value) -> str:
+    return str(value or "").replace("|", "\\|").replace("\n", " ").strip()
 
 
 def _redact_base_url(base_url: str) -> str:

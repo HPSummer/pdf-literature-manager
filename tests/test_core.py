@@ -337,6 +337,105 @@ def test_ai_reading_openai_compatible_call_and_note_do_not_store_key(tmp_path):
     assert "## 粗读" in text
 
 
+def test_preferences_persist_safe_values_only(tmp_path):
+    from pdf_manager import preferences
+
+    path = tmp_path / "prefs.json"
+    preferences.save_preferences(
+        {
+            "ai_model": "gpt-5.4",
+            "ai_base_url": "https://api.example.test/v1",
+            "ai_env_name": "OPENAI_API_KEY",
+            "api_key": "secret-test-key",
+            "OPENAI_API_KEY": "secret-test-key",
+            "unknown": "drop-me",
+        },
+        path,
+    )
+    loaded = preferences.load_preferences(path)
+    raw = path.read_text(encoding="utf-8")
+    assert loaded["ai_model"] == "gpt-5.4"
+    assert loaded["ai_env_name"] == "OPENAI_API_KEY"
+    assert "api_key" not in loaded
+    assert "OPENAI_API_KEY" not in loaded
+    assert "secret-test-key" not in raw
+    assert "drop-me" not in raw
+
+
+def test_ocr_status_text_is_stable():
+    from pdf_manager import ocr
+
+    status = ocr.status_text()
+    assert "OCR" in status
+    assert isinstance(ocr.availability(), dict)
+
+
+def test_zotero_api_plan_filters_citable_records(tmp_path):
+    from pdf_manager import zotero_api
+
+    records = [
+        {"detected_type": "paper", "title": "Ready", "authors": ["Alice"], "doi": "10.1/a", "needs_review": False},
+        {"detected_type": "thesis", "title": "Review", "authors": ["Bob"], "needs_review": True},
+        {"detected_type": "document", "title": "Manual", "authors": []},
+    ]
+    with patch("pdf_manager.zotero_api.is_available", return_value=False):
+        plan = zotero_api.import_report_placeholder(tmp_path, records, "http://127.0.0.1:23119/api")
+    text = plan.read_text(encoding="utf-8")
+    assert '"status": "unavailable"' in text
+    assert "Ready" in text
+    assert "Review" not in text
+    assert "Manual" not in text
+
+
+def test_zotero_api_item_mapping_and_unavailable_report(tmp_path):
+    from pdf_manager import zotero_api
+
+    rec = {
+        "detected_type": "thesis",
+        "thesis_type": "doctoral",
+        "title": "Low-Thrust Trajectory Optimization",
+        "authors": ["Alice Smith"],
+        "year": "2026",
+        "venue": "Space University",
+        "place": "Beijing",
+        "advisor": "Bob Lee",
+        "doi": "10.1/thesis",
+        "bibtex_key": "Smith2026Low",
+        "citation": "GB citation",
+        "ieee_citation": "IEEE citation",
+        "needs_review": False,
+    }
+    item = zotero_api.to_zotero_item(rec)
+    assert item["itemType"] == "thesis"
+    assert item["university"] == "Space University"
+    assert item["thesisType"] == "PhD thesis"
+    assert "Advisor: Bob Lee" in item["extra"]
+    assert "Citation Key: Smith2026Low" in item["extra"]
+    with patch("pdf_manager.zotero_api.is_available", return_value=False):
+        report = zotero_api.import_records(tmp_path, [rec])
+    text = report.read_text(encoding="utf-8")
+    assert '"status": "unavailable"' in text
+    assert '"attempted": 1' in text
+
+
+def test_ai_batch_rough_report_orders_research_priorities(tmp_path):
+    from pdf_manager import ai_reading
+
+    records = [
+        {"detected_type": "paper", "title": "Trajectory Optimization Control", "original_filename": "a.pdf"},
+        {"detected_type": "paper", "title": "General Literature Survey", "original_filename": "b.pdf"},
+        {"detected_type": "paper", "title": "Needs Review Control", "original_filename": "c.pdf", "needs_review": True},
+        {"detected_type": "document", "title": "Manual Control", "original_filename": "d.pdf"},
+    ]
+    rows = ai_reading.heuristic_batch_rows(records)
+    assert [r["file"] for r in rows] == ["a.pdf", "b.pdf"]
+    assert rows[0]["priority"] == "高"
+    report = ai_reading.write_batch_rough_report(tmp_path, rows, "gpt-5.4", "https://example.test/v1")
+    text = report.read_text(encoding="utf-8")
+    assert "Trajectory Optimization Control" in text
+    assert "c.pdf" not in text
+
+
 def test_chinese_thesis_metadata_fallback():
     extracted = {
         "meta_title": None,

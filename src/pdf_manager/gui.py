@@ -517,7 +517,7 @@ class ZoteroReviewDialog(tk.Toplevel):
         return [
             (iid, rec)
             for iid, rec in self._master._row_by_file.items()
-            if rec.get("detected_type") not in {"paper", "thesis"}
+            if rec.get("detected_type") not in {"paper", "thesis"} or rec.get("needs_review")
         ]
 
     def _filtered_rows(self) -> list[tuple[str, dict]]:
@@ -813,11 +813,14 @@ class App(tk.Tk):
         self._done = 0
         self._last_output: Path | None = None
         self._row_by_file: dict[str, dict] = {}
+        self._prefs: dict = {}
 
         self._set_icon()
         self._configure_style()
+        self._load_preferences()
         self._build_ui()
         self._dir_var.set(self._default_scan_dir())
+        self._apply_preferences()
 
     def _set_icon(self):
         ico = _resource_path("assets/pdf_manager.ico")
@@ -927,6 +930,9 @@ class App(tk.Tk):
         self._style_var = tk.StringVar(value="GB/T 7714")
         self._obsidian_dir_var = tk.StringVar(value="02_literature")
         self._obsidian_template_var = tk.StringVar(value="")
+        self._ai_model_var = tk.StringVar(value="gpt-5.4")
+        self._ai_base_url_var = tk.StringVar(value="https://api.openai.com/v1")
+        self._ai_env_var = tk.StringVar(value="OPENAI_API_KEY")
         ttk.Checkbutton(options, text="递归子目录", variable=self._recursive_var).pack(side=tk.LEFT)
         ttk.Checkbutton(options, text="联网补全 DOI / arXiv", variable=self._network_var).pack(side=tk.LEFT, padx=(18, 0))
         ttk.Checkbutton(options, text="生成 Obsidian 文献笔记", variable=self._obsidian_var).pack(side=tk.LEFT, padx=(18, 0))
@@ -943,8 +949,18 @@ class App(tk.Tk):
         ttk.Entry(obsidian_opts, textvariable=self._obsidian_template_var).grid(row=0, column=3, sticky="ew", padx=(6, 8))
         ttk.Button(obsidian_opts, text="选择模板", command=self._browse_obsidian_template).grid(row=0, column=4, sticky="e")
 
+        ai_opts = ttk.Frame(shell, style="Surface.TFrame")
+        ai_opts.grid(row=4, column=0, columnspan=4, sticky="ew", pady=(10, 0))
+        ai_opts.columnconfigure(3, weight=1)
+        ttk.Label(ai_opts, text="AI 模型", style="Muted.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Entry(ai_opts, textvariable=self._ai_model_var, width=14).grid(row=0, column=1, sticky="w", padx=(6, 18))
+        ttk.Label(ai_opts, text="Base URL", style="Muted.TLabel").grid(row=0, column=2, sticky="w")
+        ttk.Entry(ai_opts, textvariable=self._ai_base_url_var).grid(row=0, column=3, sticky="ew", padx=(6, 18))
+        ttk.Label(ai_opts, text="Env", style="Muted.TLabel").grid(row=0, column=4, sticky="w")
+        ttk.Entry(ai_opts, textvariable=self._ai_env_var, width=16).grid(row=0, column=5, sticky="e", padx=(6, 0))
+
         self._progress = ttk.Progressbar(shell, mode="determinate")
-        self._progress.grid(row=4, column=0, columnspan=4, sticky="ew", pady=(12, 0))
+        self._progress.grid(row=5, column=0, columnspan=4, sticky="ew", pady=(12, 0))
 
     def _build_table(self):
         body = ttk.Frame(self, style="Surface.TFrame", padding=(14, 12))
@@ -974,34 +990,37 @@ class App(tk.Tk):
 
         secondary = ttk.Frame(body, style="Surface.TFrame")
         secondary.grid(row=1, column=0, sticky="ew", pady=(0, 10))
-        self._button_group(
-            secondary,
-            "整理",
-            [
+        secondary.columnconfigure(0, weight=1)
+        secondary.columnconfigure(1, weight=1)
+        groups = [
+            ("整理", [
                 ("重命名计划", self._write_rename_plan, "Toolbutton.TButton"),
                 ("应用重命名", self._apply_rename, "Danger.TButton"),
                 ("撤销", self._undo_rename, "Toolbutton.TButton"),
-            ],
-        ).pack(side=tk.LEFT, padx=(0, 14))
-        self._button_group(
-            secondary,
-            "复核",
-            [
+                ("输出目录", self._open_output, "Toolbutton.TButton"),
+            ]),
+            ("复核", [
                 ("批量复核", self._open_batch_review_dialog, "Toolbutton.TButton"),
+                ("复核队列", self._open_review_queue, "Toolbutton.TButton"),
+                ("一键通过", self._accept_selected_review, "Toolbutton.TButton"),
                 ("重复合并", self._open_duplicate_dialog, "Toolbutton.TButton"),
+            ]),
+            ("AI", [
                 ("AI 阅读", self._open_ai_reading_dialog, "Accent.TButton"),
-            ],
-        ).pack(side=tk.LEFT, padx=(0, 14))
-        self._button_group(
-            secondary,
-            "导入",
-            [
+                ("批量粗读", self._batch_ai_rough, "Accent.TButton"),
+                ("OCR 状态", self._show_ocr_status, "Toolbutton.TButton"),
+            ]),
+            ("导入", [
                 ("Zotero 检查", self._open_zotero_review_dialog, "Toolbutton.TButton"),
                 ("导入 Zotero", self._import_zotero, "Toolbutton.TButton"),
+                ("Zotero API", self._import_zotero_api, "Toolbutton.TButton"),
                 ("导入 Obsidian", self._import_obsidian, "Toolbutton.TButton"),
-                ("输出目录", self._open_output, "Toolbutton.TButton"),
-            ],
-        ).pack(side=tk.LEFT)
+            ]),
+        ]
+        for idx, (label, group_buttons) in enumerate(groups):
+            self._button_group(secondary, label, group_buttons).grid(
+                row=idx // 2, column=idx % 2, sticky="w", padx=(0, 14), pady=(0, 6)
+            )
 
         table_frame = ttk.Frame(body, style="Surface.TFrame")
         table_frame.grid(row=2, column=0, sticky="nsew")
@@ -1078,12 +1097,53 @@ class App(tk.Tk):
     def _default_scan_dir(self) -> str:
         return str(Path(sys.executable).parent) if getattr(sys, "frozen", False) else str(Path.cwd())
 
+    def _load_preferences(self):
+        try:
+            from pdf_manager import preferences
+
+            self._prefs = preferences.load_preferences()
+        except Exception:
+            self._prefs = {}
+
+    def _apply_preferences(self):
+        if not self._prefs:
+            return
+        if self._prefs.get("citation_style") in STYLE_LABEL_BY_KEY:
+            self._style_var.set(STYLE_LABEL_BY_KEY[self._prefs["citation_style"]])
+        self._recursive_var.set(bool(self._prefs.get("recursive", self._recursive_var.get())))
+        self._network_var.set(bool(self._prefs.get("enable_network", self._network_var.get())))
+        self._obsidian_var.set(bool(self._prefs.get("output_obsidian_notes", self._obsidian_var.get())))
+        self._obsidian_dir_var.set(self._prefs.get("obsidian_literature_dir") or self._obsidian_dir_var.get())
+        self._obsidian_template_var.set(self._prefs.get("obsidian_note_template") or "")
+        self._ai_model_var.set(self._prefs.get("ai_model") or self._ai_model_var.get())
+        self._ai_base_url_var.set(self._prefs.get("ai_base_url") or self._ai_base_url_var.get())
+        self._ai_env_var.set(self._prefs.get("ai_env_name") or self._ai_env_var.get())
+
+    def _save_preferences(self):
+        try:
+            from pdf_manager import preferences
+
+            preferences.save_preferences({
+                "recursive": self._recursive_var.get(),
+                "enable_network": self._network_var.get(),
+                "output_obsidian_notes": self._obsidian_var.get(),
+                "citation_style": STYLE_OPTIONS.get(self._style_var.get(), "gbt7714"),
+                "obsidian_literature_dir": self._obsidian_dir_var.get().strip() or "02_literature",
+                "obsidian_note_template": self._obsidian_template_var.get().strip(),
+                "ai_model": self._ai_model_var.get().strip() or "gpt-5.4",
+                "ai_base_url": self._ai_base_url_var.get().strip() or "https://api.openai.com/v1",
+                "ai_env_name": self._ai_env_var.get().strip() or "OPENAI_API_KEY",
+            })
+        except Exception:
+            pass
+
     def _browse(self):
         directory = filedialog.askdirectory(initialdir=self._dir_var.get() or str(Path.cwd()))
         if directory:
             self._dir_var.set(directory)
 
     def _cfg(self) -> dict:
+        self._save_preferences()
         return {
             "recursive": self._recursive_var.get(),
             "enable_network": self._network_var.get(),
@@ -1358,7 +1418,68 @@ class App(tk.Tk):
         if rec.get("detected_type") not in {"paper", "thesis"}:
             if not messagebox.askyesno("非文献记录", "当前记录不是 paper/thesis，仍要生成 AI 阅读笔记吗？"):
                 return
-        AIReadingDialog(self, rec)
+        dialog = AIReadingDialog(self, rec)
+        dialog._model_var.set(self._ai_model_var.get())
+        dialog._base_url_var.set(self._ai_base_url_var.get())
+        dialog._env_var.set(self._ai_env_var.get())
+
+    def _review_items(self) -> list[tuple[str, dict]]:
+        return [
+            (item, rec)
+            for item, rec in self._row_by_file.items()
+            if rec.get("needs_review") or rec.get("detected_type") == "unknown"
+        ]
+
+    def _open_review_queue(self):
+        rows = self._review_items()
+        if not rows:
+            messagebox.showinfo("复核队列", "当前没有待复核记录。")
+            return
+        item, rec = rows[0]
+        self._tree.selection_set(item)
+        self._tree.focus(item)
+        ReviewDialog(self, item, rec)
+
+    def _accept_selected_review(self):
+        selected = self._selected_item()
+        if not selected:
+            messagebox.showinfo("未选择文件", "请先选择一条记录。")
+            return
+        item, rec = selected
+        rec["needs_review"] = False
+        reason = rec.get("classification_reason") or ""
+        marker = "manually accepted"
+        rec["classification_reason"] = f"{reason}; {marker}" if reason and marker not in reason else (reason or marker)
+        self._refresh_row(item)
+        self._update_summary()
+        self._update_detail()
+        self._status_var.set("已清除当前记录的待复核标记")
+
+    def _batch_ai_rough(self):
+        rows = self._selected_rows()
+        records = [rec for _item, rec, _values in rows] if rows else self._records
+        if not records:
+            messagebox.showinfo("没有记录", "请先扫描或加载上次结果。")
+            return
+        scan_dir = self._dir_var.get().strip()
+        if not scan_dir:
+            messagebox.showinfo("未选择文件夹", "请先选择扫描文件夹。")
+            return
+        from pdf_manager import ai_reading
+
+        out = Path(scan_dir) / OUTPUT_DIR_NAME
+        report = ai_reading.write_batch_rough_report(
+            out,
+            ai_reading.heuristic_batch_rows(records),
+            self._ai_model_var.get().strip() or ai_reading.DEFAULT_MODEL,
+            self._ai_base_url_var.get().strip() or ai_reading.DEFAULT_BASE_URL,
+        )
+        self._last_output = out
+        self._status_var.set(f"批量粗读排序已生成：{report.name}")
+        try:
+            os.startfile(str(report))
+        except Exception:
+            messagebox.showinfo("批量粗读完成", f"已生成：\n{report}")
 
     def _load_session(self):
         scan_dir = self._dir_var.get().strip()
@@ -1461,6 +1582,39 @@ class App(tk.Tk):
             self._status_var.set(f"已打开 Zotero 导入文件：{target.name}")
         except Exception as exc:
             messagebox.showerror("打开失败", f"请在 Zotero 中手动导入：\n{target}\n\n{exc}")
+
+    def _import_zotero_api(self):
+        out = self._write_current_export()
+        if not out:
+            return
+        try:
+            from pdf_manager import zotero_api
+
+            report = zotero_api.import_records(out, self._records)
+            data = json.loads(report.read_text(encoding="utf-8"))
+            if data.get("status") == "imported":
+                messagebox.showinfo(
+                    "Zotero API",
+                    f"已通过 Zotero local API 导入 {data.get('created', 0)}/{data.get('attempted', 0)} 条。\n报告：\n{report}",
+                )
+            else:
+                plan = zotero_api.import_report_placeholder(out, self._records)
+                messagebox.showinfo(
+                    "Zotero API",
+                    f"暂未完成直接导入。请确认 Zotero 已启动并启用本地 API。\n"
+                    f"已生成导入报告：\n{report}\n\n可回退使用 RIS/BibTeX：\n{plan}",
+                )
+            self._status_var.set(f"Zotero API 报告已生成：{report.name}")
+        except Exception as exc:
+            messagebox.showerror("Zotero API 失败", str(exc))
+
+    def _show_ocr_status(self):
+        try:
+            from pdf_manager import ocr
+
+            messagebox.showinfo("OCR 状态", ocr.status_text())
+        except Exception as exc:
+            messagebox.showerror("OCR 状态失败", str(exc))
 
     def _import_obsidian(self):
         out = self._write_current_export()

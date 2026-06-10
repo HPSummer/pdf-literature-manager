@@ -12,8 +12,12 @@ Windows 一键 PDF 文献管理工具，面向论文、硕士/博士学位论文
 - 生成 Obsidian 文献笔记，并可一键复制到 vault 的 `02_literature`
 - 支持 Obsidian 笔记模板和目标子目录配置，模板可使用 `zotero_key`、`citation_gbt`、`citation_ieee`、`school`、`place` 等变量
 - 支持 Zotero 等文献管理软件导入 BibTeX/RIS，并生成 Zotero 导入遗漏报告
+- 支持 Zotero local API 直连导入；Zotero 未启动或 API 不可用时自动生成可复核报告并回退到 RIS/BibTeX
 - 提供 Zotero 导出检查 / 待复核面板，可按 skipped、unknown、document、needs_review、缺 DOI、缺作者筛选并批量修正
 - 提供可选 AI 粗读 / 精读，支持 OpenAI-compatible API、可编辑模型名和 Base URL，API Key 仅从环境变量或本机临时输入读取
+- 提供批量粗读排序报告，帮助先筛选值得精读的论文；不会在批量排序中调用或消耗 API
+- 保存非敏感偏好配置：引用风格、递归扫描、联网补全、Obsidian 目录/模板、AI 模型名、Base URL 和环境变量名；不会保存 API Key
+- 提供 OCR 状态检测，便于判断中文扫描版 PDF 是否需要安装 tesseract、PaddleOCR 或 EasyOCR
 - 优化 GUI 信息架构：扫描区、整理/复核/导入工具组、右侧当前记录详情和下一步建议
 - DOI/arXiv 与题名、作者、年份、期刊/出版社补全后自动通过，可直接重命名和导出，无需逐条复核
 - CLI 重命名计划同样使用 GB/T 7714 安全文件名，并限制长度以适配 Windows 路径
@@ -39,7 +43,7 @@ PDF文献管理器.exe
 6. 需要批量修正时使用“批量复核”；重复条目使用“重复合并”生成合并标记。
 7. 使用“Zotero 检查”查看本次可导入数量和 skipped 条目，必要时批量标为 `paper` 或 `thesis` 后重新导出。
 8. 选中文献后点击“AI 阅读”，选择粗读/精读，按需修改模型、Base URL、环境变量名或临时 API Key。
-9. 使用“导入 Zotero”“导入 Obsidian”完成外部软件导入；若 Zotero 条目不完整，可打开待复核面板或 `zotero_import_report.md`。
+9. 使用“导入 Zotero”打开 RIS/BibTeX，或使用“Zotero API”尝试直连 Zotero local API；若 Zotero 条目不完整，可打开待复核面板或 `zotero_import_report.md`。
 10. 重命名后可通过“撤销重命名”按日志恢复。
 
 ## CLI 使用
@@ -66,6 +70,8 @@ _pdf_manager_output/
 | `references.bib` | BibTeX 文献库 |
 | `references.ris` | Zotero 兼容 RIS 导入文件 |
 | `zotero_import_report.md` | Zotero 实际导入数量与被跳过记录说明 |
+| `zotero_local_api_report.json` | Zotero local API 直连导入结果 |
+| `zotero_local_api_plan.json` | Zotero local API 不可用时的回退导入计划 |
 | `obsidian_notes/` | Obsidian 文献笔记 |
 | `ai_reading_notes/` | AI 粗读/精读 Markdown 笔记 |
 | `import_guide.md` | 第三方软件导入说明 |
