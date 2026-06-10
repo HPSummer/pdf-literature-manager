@@ -79,8 +79,9 @@ def write_all(records: list[dict], scan_dir: str, cfg: dict) -> Path:
                 bib = rec.get("_bibtex_entry") or ""
                 f.write(bib + "\n\n")
 
-    # references.ris for Zotero, 小绿鲸, and other reference managers
+    # references.ris for Zotero and other reference managers
     (out / "references.ris").write_text(integrations.records_to_ris(records), encoding="utf-8")
+    integrations.write_zotero_import_report(out, records)
     integrations.write_import_guide(out)
 
     # pdf_metadata.json

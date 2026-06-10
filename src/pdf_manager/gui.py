@@ -581,7 +581,6 @@ class App(tk.Tk):
             ("打开输出目录", self._open_output, "Toolbutton.TButton"),
             ("导入 Zotero", self._import_zotero, "Toolbutton.TButton"),
             ("导入 Obsidian", self._import_obsidian, "Toolbutton.TButton"),
-            ("导入小绿鲸", self._import_xiaolvjing, "Toolbutton.TButton"),
         ]
         for text, command, btn_style in secondary_buttons:
             ttk.Button(secondary, text=text, style=btn_style, command=command).pack(side=tk.LEFT, padx=(8, 0))
@@ -967,32 +966,28 @@ class App(tk.Tk):
         out = self._ensure_export()
         if not out:
             return
+        from pdf_manager import integrations
+
+        summary = integrations.zotero_export_summary(self._records)
         ris = out / "references.ris"
         bib = out / "references.bib"
         target = ris if ris.exists() and ris.stat().st_size else bib
         if not target.exists():
             messagebox.showinfo("没有可导入文献", "当前结果中没有论文或学位论文。")
             return
+        if summary["omitted"]:
+            report = out / "zotero_import_report.md"
+            messagebox.showwarning(
+                "Zotero 导入不完整提示",
+                f"Zotero 将导入 {summary['citable']}/{summary['total']} 条文献。\n"
+                f"其余 {summary['omitted']} 条被识别为待复核、unknown 或普通 PDF，已写入：\n{report}\n\n"
+                "请用“批量复核”把应进入文献库的条目标为 paper/thesis 后重新导出。",
+            )
         try:
             os.startfile(str(target))
             self._status_var.set(f"已打开 Zotero 导入文件：{target.name}")
         except Exception as exc:
             messagebox.showerror("打开失败", f"请在 Zotero 中手动导入：\n{target}\n\n{exc}")
-
-    def _import_xiaolvjing(self):
-        out = self._ensure_export()
-        if not out:
-            return
-        ris = out / "references.ris"
-        bib = out / "references.bib"
-        if not ris.exists() or not ris.stat().st_size:
-            messagebox.showinfo("没有可导入文献", "当前结果中没有论文或学位论文。")
-            return
-        try:
-            os.startfile(str(ris))
-            self._status_var.set("已打开小绿鲸兼容 RIS 文件")
-        except Exception as exc:
-            messagebox.showerror("打开失败", f"请在小绿鲸中手动导入 references.ris；若不兼容可导入 references.bib。\n\n{ris}\n{bib}\n\n{exc}")
 
     def _import_obsidian(self):
         out = self._ensure_export()

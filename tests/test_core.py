@@ -320,15 +320,34 @@ def test_ris_and_import_guide_output(tmp_path):
         "error": None,
         "_bibtex_entry": "@phdthesis{Smith2024Optimal,\n}",
     }
-    out = writers.write_all([rec], str(tmp_path), {"citation_style": "gbt7714"})
+    doc = dict(rec)
+    doc.update({
+        "original_filename": "manual.pdf",
+        "absolute_path": str(tmp_path / "manual.pdf"),
+        "relative_path": "manual.pdf",
+        "detected_type": "document",
+        "title": "Manual",
+        "authors": [],
+        "bibtex_key": None,
+        "tag": "Manual",
+        "needs_review": True,
+        "_bibtex_entry": None,
+    })
+    out = writers.write_all([rec, doc], str(tmp_path), {"citation_style": "gbt7714"})
     ris = (out / "references.ris").read_text(encoding="utf-8")
     assert "TY  - THES" in ris
     assert "TI  - Optimal Low-Thrust Trajectories" in ris
     assert "PB  - Space University" in ris
+    assert "Manual" not in ris
     guide = (out / "import_guide.md").read_text(encoding="utf-8")
     assert "Zotero" in guide
     assert "Obsidian" in guide
-    assert "小绿鲸" in guide
+    assert "小绿鲸" not in guide
+    report = (out / "zotero_import_report.md").read_text(encoding="utf-8")
+    assert "Exported to Zotero: 1" in report
+    assert "Skipped: 1" in report
+    assert "manual.pdf" in report
+    assert "needs review" in report
 
 
 def test_copy_obsidian_notes(tmp_path):
