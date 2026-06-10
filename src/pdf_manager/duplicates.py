@@ -42,6 +42,10 @@ def mark_duplicates(records: list[dict]) -> list[dict]:
             if rec is not keep:
                 rec["merged_into"] = keep.get("bibtex_key") or keep.get("original_filename")
                 rec["needs_review"] = True
+                reason = rec.get("classification_reason") or ""
+                marker = "duplicate candidate; confirm merge target"
+                if marker not in reason:
+                    rec["classification_reason"] = f"{reason}; {marker}" if reason else marker
     return records
 
 

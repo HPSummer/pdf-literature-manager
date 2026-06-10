@@ -5,11 +5,17 @@ from pathlib import Path
 
 
 def citable_records(records: list[dict]) -> list[dict]:
-    return [r for r in records if r.get("detected_type") in {"paper", "thesis"}]
+    return [
+        r for r in records
+        if r.get("detected_type") in {"paper", "thesis"} and not r.get("needs_review")
+    ]
 
 
 def omitted_zotero_records(records: list[dict]) -> list[dict]:
-    return [r for r in records if r.get("detected_type") not in {"paper", "thesis"}]
+    return [
+        r for r in records
+        if r.get("detected_type") not in {"paper", "thesis"} or r.get("needs_review")
+    ]
 
 
 def zotero_export_summary(records: list[dict]) -> dict:
@@ -34,7 +40,7 @@ def write_zotero_import_report(out_dir: Path, records: list[dict]) -> Path:
         f"- Skipped: {summary['omitted']}",
         "",
         "Only records classified as `paper` or `thesis` are exported to `references.ris` and `references.bib`.",
-        "Use batch review to change valid literature records from `unknown` or `document` to `paper`/`thesis`, then export again.",
+        "Use batch review to fix metadata/type and clear `needs_review`, then export again.",
         "",
     ]
     if summary["omitted_records"]:
@@ -60,7 +66,8 @@ def _zotero_skip_reason(rec: dict) -> str:
     if rec.get("error"):
         return f"processing error: {rec.get('error')}"
     if rec.get("needs_review"):
-        return "needs review before bibliographic export"
+        reason = rec.get("classification_reason") or ""
+        return f"needs review before bibliographic export: {reason}" if reason else "needs review before bibliographic export"
     dtype = rec.get("detected_type") or "unknown"
     if dtype == "document":
         return "classified as ordinary PDF"
@@ -113,7 +120,7 @@ def write_import_guide(out_dir: Path) -> Path:
 ## Zotero
 
 Import `references.bib` or `references.ris` from Zotero: File -> Import.
-If fewer items appear in Zotero than expected, check `zotero_import_report.md` and use batch review to mark literature records as `paper` or `thesis`.
+If fewer items appear in Zotero than expected, check `zotero_import_report.md` and use batch review to fix metadata/type and clear `needs_review`.
 
 ## Obsidian
 

@@ -123,6 +123,43 @@ def test_complete_doi_metadata_auto_accepts_unknown_paper():
     assert "auto accepted" in rec["classification_reason"]
 
 
+def test_incomplete_literature_metadata_requires_review_before_rename():
+    from pdf_manager import record_utils
+
+    rec = {
+        "detected_type": "thesis",
+        "confidence": 0.82,
+        "needs_review": False,
+        "classification_reason": "Thesis/dissertation signal found",
+        "title": "",
+        "authors": [],
+        "year": "2024",
+        "venue": "",
+    }
+    assert record_utils.require_metadata_for_literature(rec) is True
+    assert rec["needs_review"] is True
+    assert record_utils.ready_for_automatic_rename(rec) is False
+    assert "missing metadata" in rec["classification_reason"]
+
+
+def test_thesis_auto_accept_requires_school():
+    from pdf_manager import record_utils
+
+    rec = {
+        "detected_type": "thesis",
+        "title": "Low-Thrust Trajectory Optimization",
+        "authors": ["Alice Smith"],
+        "year": "2026",
+        "venue": "",
+        "publisher": None,
+        "needs_review": False,
+        "classification_reason": "Thesis/dissertation signal found",
+    }
+    assert record_utils.auto_accept_literature(rec) is False
+    assert record_utils.require_metadata_for_literature(rec) is True
+    assert rec["needs_review"] is True
+
+
 def test_thesis_classification_and_gbt_citation():
     from pdf_manager import classifier
 
@@ -149,6 +186,24 @@ def test_thesis_classification_and_gbt_citation():
     assert "低推力轨迹优化方法研究[D]" in gbt
     assert "哈尔滨: 哈尔滨工业大学, 2024" in gbt
     assert citation.filename_from_gbt(rec).endswith(".pdf")
+    assert len(citation.filename_from_gbt(rec)) <= 114
+
+
+def test_gbt_filename_is_windows_path_friendly():
+    from pdf_manager import citation
+
+    rec = {
+        "detected_type": "paper",
+        "authors": ["Yankai Wang", "Yingjie Chen", "Ti Chen", "Zhengtao Wei"],
+        "title": "Adaptive Control for Test Mass Capture and Drag-Free Mode in Drag-Free Satellite",
+        "venue": "IEEE Transactions on Aerospace and Electronic Systems",
+        "year": "2025",
+        "doi": "10.1109/TAES.2025.3575552",
+    }
+    name = citation.filename_from_gbt(rec)
+    assert name.endswith(".pdf")
+    assert len(name) <= 114
+    assert not any(ch in name for ch in '<>:"/\\|?*')
 
 
 # 5. BibTeX key format
@@ -231,6 +286,7 @@ def test_duplicate_merge_marks_primary():
     assert records[0]["duplicate_group"] == "doi:10.1/abc"
     assert records[1]["merged_into"] == "A"
     assert records[1]["needs_review"] is True
+    assert "duplicate candidate" in records[1]["classification_reason"]
 
 
 # 8. Network failure fallback
@@ -431,6 +487,37 @@ def test_writer_generates_missing_bibtex_for_reviewed_record(tmp_path):
     assert "@article{Smith2026Reviewed" in bib
     assert "Reviewed Paper" in bib
     assert rec["tag"] == "Smith2026Reviewed"
+
+
+def test_needs_review_literature_is_not_exported_to_zotero(tmp_path):
+    from pdf_manager import integrations, writers
+
+    rec = {
+        "original_filename": "paper.pdf",
+        "absolute_path": str(tmp_path / "paper.pdf"),
+        "relative_path": "paper.pdf",
+        "file_size": 100,
+        "page_count": 10,
+        "detected_type": "paper",
+        "confidence": 0.82,
+        "title": "Needs Review Paper",
+        "authors": ["Alice Smith"],
+        "year": "2026",
+        "venue": "Journal",
+        "doi": "10.1000/review",
+        "publisher": None,
+        "bibtex_key": "Smith2026Review",
+        "tag": "Smith2026Review",
+        "needs_review": True,
+        "classification_reason": "duplicate candidate; confirm merge target",
+        "_bibtex_entry": "@article{Smith2026Review,\n}",
+    }
+    out = writers.write_all([rec], str(tmp_path), {"citation_style": "gbt7714"})
+    assert integrations.zotero_export_summary([rec])["citable"] == 0
+    assert "Smith2026Review" not in (out / "references.bib").read_text(encoding="utf-8")
+    report = (out / "zotero_import_report.md").read_text(encoding="utf-8")
+    assert "Skipped: 1" in report
+    assert "needs review" in report
 
 
 def test_copy_obsidian_notes(tmp_path):

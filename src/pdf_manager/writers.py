@@ -31,7 +31,10 @@ def write_all(records: list[dict], scan_dir: str, cfg: dict) -> Path:
     style_label = citation.style_label(style)
     records = _detect_duplicates(records)
 
-    papers = [r for r in records if r.get("detected_type") in {"paper", "thesis"}]
+    papers = [
+        r for r in records
+        if r.get("detected_type") in {"paper", "thesis"} and not r.get("needs_review")
+    ]
     for rec in papers:
         if not rec.get("_bibtex_entry"):
             key, bib_entry = bibtex.generate(rec)

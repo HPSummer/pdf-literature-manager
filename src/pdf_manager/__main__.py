@@ -32,7 +32,7 @@ def main():
 
     scan_dir = args.path or _exe_dir()
 
-    logging.basicConfig(level=logging.WARNING)
+    logging.basicConfig(level=logging.ERROR)
 
     files = scanner.scan(scan_dir, cfg.get("recursive", False))
     records: list[dict] = []
@@ -96,6 +96,7 @@ def main():
             if meta.get("summary"):
                 rec["notes"] = meta["summary"]
             record_utils.auto_accept_literature(rec)
+            record_utils.require_metadata_for_literature(rec)
 
             if rec["detected_type"] in {"paper", "thesis"}:
                 rec["ieee_citation"] = citation.generate(rec, "ieee")
@@ -135,15 +136,19 @@ def main():
 
 
 def _write_rename_plan(records: list[dict], out_dir: Path):
+    from pdf_manager import citation, record_utils
+
     with open(out_dir / "rename_plan.md", "w", encoding="utf-8") as f:
         f.write("# Rename Plan\n\n")
-        f.write("| Original | Suggested |\n|---|---|\n")
+        f.write("| Status | Original | Suggested |\n|---|---|---|\n")
         for rec in records:
             orig = rec.get("original_filename", "")
-            key = rec.get("bibtex_key")
-            if key:
-                suffix = Path(orig).suffix
-                f.write(f"| {orig} | {key}{suffix} |\n")
+            if rec.get("detected_type") in {"paper", "thesis"}:
+                if record_utils.ready_for_automatic_rename(rec):
+                    suggested = citation.filename_from_gbt(rec)
+                else:
+                    suggested = "needs review before rename"
+                f.write(f"| {rec.get('detected_type')} | {orig} | {suggested} |\n")
 
 
 if __name__ == "__main__":

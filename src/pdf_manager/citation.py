@@ -56,7 +56,7 @@ def filename_from_gbt(rec: dict) -> str:
     text = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", text)
     text = re.sub(r"\s+", " ", text).strip(" ._")
     text = text.replace("[", "［").replace("]", "］")
-    return (text[:150] or "untitled") + ".pdf"
+    return (text[:110].rstrip(" ._") or "untitled") + ".pdf"
 
 
 def _clean(value) -> str:

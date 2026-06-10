@@ -1153,6 +1153,7 @@ class App(tk.Tk):
                 if meta.get("summary"):
                     rec["notes"] = meta["summary"]
                 record_utils.auto_accept_literature(rec)
+                record_utils.require_metadata_for_literature(rec)
                 if rec["detected_type"] in {"paper", "thesis"}:
                     rec["ieee_citation"] = citation.generate(rec, "ieee")
                     rec["citation"] = citation.generate(rec, cfg.get("citation_style", "gbt7714"))
@@ -1530,14 +1531,19 @@ class App(tk.Tk):
             f.write("# Rename Plan\n\n")
             f.write("| Status | Original | Suggested |\n|---|---|---|\n")
             for _item, rec, values in rows:
-                f.write(f"| {_status_label(rec)} | {rec.get('original_filename', '')} | {values[7]} |\n")
+                suggested = values[7] if not rec.get("needs_review") else "需复核后再重命名"
+                f.write(f"| {_status_label(rec)} | {rec.get('original_filename', '')} | {suggested} |\n")
         self._last_output = out
         messagebox.showinfo("重命名计划已生成", f"请先复核计划，再决定是否应用重命名。\n\n{plan}")
 
     def _apply_rename(self):
         rows = self._selected_rows()
         to_rename = []
+        blocked_review = 0
         for item, rec, values in rows:
+            if rec.get("needs_review"):
+                blocked_review += 1
+                continue
             new_name = _clean_filename(str(values[7]).strip())
             original = rec.get("original_filename", "")
             if not new_name or new_name == original:
@@ -1546,11 +1552,13 @@ class App(tk.Tk):
                 new_name += ".pdf"
             to_rename.append((item, rec, new_name))
         if not to_rename:
-            messagebox.showinfo("无需重命名", "没有勾选需要重命名的文件，或建议文件名与原名一致。")
+            extra = f"\n其中 {blocked_review} 条需要先复核。" if blocked_review else ""
+            messagebox.showinfo("无需重命名", f"没有勾选需要重命名的文件，或建议文件名与原名一致。{extra}")
             return
         if not messagebox.askyesno("确认重命名", f"即将重命名 {len(to_rename)} 个 PDF。\n建议先生成并复核 rename_plan.md。是否继续？"):
             return
-        success = failed = skipped = 0
+        success = failed = 0
+        skipped = blocked_review
         out = Path(self._dir_var.get().strip()) / OUTPUT_DIR_NAME
         out.mkdir(parents=True, exist_ok=True)
         for item, rec, new_name in to_rename:
@@ -1633,7 +1641,10 @@ class App(tk.Tk):
         if rec.get("error"):
             hint = f"处理失败：{rec.get('error')}"
         elif rec.get("needs_review") or rec.get("detected_type") == "unknown":
-            hint = f"需要复核：{reason}"
+            if rec.get("duplicate_group"):
+                hint = f"重复候选：建议打开重复合并，确认是否保留主记录 {rec.get('merged_into') or ''}。"
+            else:
+                hint = f"需要复核：{reason}"
         elif rec.get("detected_type") in {"paper", "thesis"}:
             hint = "可直接导出 Zotero / Obsidian；如需快速判断价值，可生成 AI 阅读笔记。"
         else:
