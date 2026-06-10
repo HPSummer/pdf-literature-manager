@@ -15,6 +15,11 @@ SAFE_KEYS = {
     "obsidian_note_template",
     "output_obsidian_notes",
     "recursive",
+    "enable_ocr",
+    "ocr_lang",
+    "zotero_collection_key",
+    "zotero_attach_pdf",
+    "zotero_dedupe",
 }
 
 

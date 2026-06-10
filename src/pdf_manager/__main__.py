@@ -32,6 +32,14 @@ def main():
 
     scan_dir = args.path or _exe_dir()
 
+    if args.sample_regression:
+        from pdf_manager import sample_regression
+
+        out_dir = Path(scan_dir) / "_pdf_manager_output"
+        report = sample_regression.run_samples(Path(args.sample_regression), out_dir, cfg)
+        print(f"Sample regression report: {report}")
+        return
+
     logging.basicConfig(level=logging.ERROR)
 
     files = scanner.scan(scan_dir, cfg.get("recursive", False))
@@ -75,7 +83,7 @@ def main():
             "_bibtex_entry": None,
         }
         try:
-            ext = extractor.extract(path)
+            ext = extractor.extract(path, cfg)
             rec.update({k: ext[k] for k in ext if k in rec or k in ("text", "meta_title", "meta_author")})
             rec["page_count"] = ext.get("page_count", 0)
             rec["doi"] = ext.get("doi")

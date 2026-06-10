@@ -16,6 +16,11 @@ DEFAULTS = {
     "obsidian_links": ["trajectory_optimization_kb", "02_literature"],
     "obsidian_literature_dir": "02_literature",
     "obsidian_note_template": "",
+    "enable_ocr": True,
+    "ocr_lang": "chi_sim+eng",
+    "zotero_collection_key": "",
+    "zotero_attach_pdf": True,
+    "zotero_dedupe": True,
 }
 
 

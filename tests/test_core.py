@@ -370,6 +370,38 @@ def test_ocr_status_text_is_stable():
     assert isinstance(ocr.availability(), dict)
 
 
+def test_extractor_uses_ocr_fallback_when_text_is_empty(tmp_path):
+    from pdf_manager import extractor
+
+    pdf = tmp_path / "scan.pdf"
+    pdf.write_bytes(b"%PDF-1.4")
+
+    class FakePage:
+        def get_text(self):
+            return ""
+
+    class FakeDoc:
+        metadata = {}
+
+        def __len__(self):
+            return 1
+
+        def __getitem__(self, index):
+            return FakePage()
+
+        def close(self):
+            return None
+
+    with patch("pdf_manager.extractor.fitz.open", return_value=FakeDoc()), patch(
+        "pdf_manager.ocr.extract_text",
+        return_value={"text": "OCR Title\nAbstract\nReferences", "engine": "tesseract", "error": None},
+    ):
+        info = extractor.extract(pdf, {"enable_ocr": True, "ocr_lang": "chi_sim+eng"})
+    assert info["text"].startswith("OCR Title")
+    assert info["ocr_engine"] == "tesseract"
+    assert info["needs_review"] is False
+
+
 def test_zotero_api_plan_filters_citable_records(tmp_path):
     from pdf_manager import zotero_api
 
@@ -418,6 +450,45 @@ def test_zotero_api_item_mapping_and_unavailable_report(tmp_path):
     assert '"attempted": 1' in text
 
 
+def test_zotero_api_dedupes_and_attaches_existing_pdf(tmp_path):
+    from pdf_manager import zotero_api
+
+    pdf = tmp_path / "paper.pdf"
+    pdf.write_text("pdf", encoding="utf-8")
+    rec = {
+        "detected_type": "paper",
+        "title": "Existing Paper",
+        "authors": ["Alice"],
+        "year": "2026",
+        "doi": "10.1/existing",
+        "needs_review": False,
+        "absolute_path": str(pdf),
+    }
+
+    def fake_get(url, **kwargs):
+        class Response:
+            status_code = 200
+
+            def json(self):
+                return [{"key": "ABC123", "data": {"key": "ABC123", "DOI": "10.1/existing", "title": "Existing Paper"}}]
+
+        return Response()
+
+    class PostResponse:
+        status_code = 201
+
+    with patch("pdf_manager.zotero_api.is_available", return_value=True), patch(
+        "requests.get", side_effect=fake_get
+    ), patch("requests.post", return_value=PostResponse()) as post:
+        report = zotero_api.import_records(tmp_path, [rec], attach_pdf=True, dedupe=True)
+    text = report.read_text(encoding="utf-8")
+    assert '"status": "deduped"' in text
+    assert '"existing": 1' in text
+    assert '"attached": 1' in text
+    assert rec["zotero_key"] == "ABC123"
+    assert post.call_args.kwargs["json"][0]["parentItem"] == "ABC123"
+
+
 def test_ai_batch_rough_report_orders_research_priorities(tmp_path):
     from pdf_manager import ai_reading
 
@@ -434,6 +505,44 @@ def test_ai_batch_rough_report_orders_research_priorities(tmp_path):
     text = report.read_text(encoding="utf-8")
     assert "Trajectory Optimization Control" in text
     assert "c.pdf" not in text
+
+
+def test_ai_batch_generation_writes_summary_without_storing_key(tmp_path):
+    from pdf_manager import ai_reading
+
+    pdf = tmp_path / "paper.pdf"
+    pdf.write_text("fake", encoding="utf-8")
+    rec = {
+        "detected_type": "paper",
+        "title": "A Paper",
+        "original_filename": "paper.pdf",
+        "absolute_path": str(pdf),
+        "needs_review": False,
+    }
+    with patch("pdf_manager.ai_reading.extract_text", return_value="Abstract text"), patch(
+        "pdf_manager.ai_reading.call_openai_compatible", return_value="rough note"
+    ):
+        rows = ai_reading.generate_batch_readings(
+            records=[rec],
+            out_dir=tmp_path,
+            mode="rough",
+            model="gpt-5.4",
+            base_url="https://example.test/v1",
+            api_key="secret-test-key",
+            preference="control",
+        )
+    assert rows[0]["status"] == "generated"
+    summary = (tmp_path / "ai_reading_notes" / "batch_ai_rough_summary.md").read_text(encoding="utf-8")
+    assert "paper.pdf" in summary
+    assert "secret-test-key" not in summary
+
+
+def test_sample_regression_empty_directory(tmp_path):
+    from pdf_manager import sample_regression
+
+    report = sample_regression.run_samples(tmp_path / "samples", tmp_path / "out", {"enable_network": False})
+    assert report.exists()
+    assert "Sample Regression Report" in report.read_text(encoding="utf-8")
 
 
 def test_chinese_thesis_metadata_fallback():

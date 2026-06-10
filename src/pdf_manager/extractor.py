@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import re
 from pathlib import Path
 
@@ -12,7 +14,8 @@ except ImportError:
     _FITZ = False
 
 
-def extract(path: Path) -> dict:
+def extract(path: Path, cfg: dict | None = None) -> dict:
+    cfg = cfg or {}
     info = {
         "page_count": 0,
         "text": "",
@@ -20,6 +23,8 @@ def extract(path: Path) -> dict:
         "arxiv_id": None,
         "meta_title": None,
         "meta_author": None,
+        "ocr_engine": None,
+        "ocr_error": None,
         "needs_review": False,
     }
     try:
@@ -36,6 +41,9 @@ def extract(path: Path) -> dict:
         else:
             info["needs_review"] = True
             return info
+
+        if not info["text"].strip() and cfg.get("enable_ocr", True):
+            _apply_ocr_fallback(path, info, cfg)
 
         if not info["text"].strip():
             info["needs_review"] = True
@@ -55,3 +63,21 @@ def extract(path: Path) -> dict:
         info["error"] = str(e)
         info["needs_review"] = True
     return info
+
+
+def _apply_ocr_fallback(path: Path, info: dict, cfg: dict) -> None:
+    try:
+        from pdf_manager import ocr
+
+        result = ocr.extract_text(
+            path,
+            max_pages=int(cfg.get("ocr_max_pages") or 2),
+            lang=str(cfg.get("ocr_lang") or "chi_sim+eng"),
+        )
+        info["ocr_engine"] = result.get("engine")
+        info["ocr_error"] = result.get("error")
+        if result.get("text"):
+            info["text"] = result["text"]
+            info["needs_review"] = False
+    except Exception as exc:
+        info["ocr_error"] = str(exc)

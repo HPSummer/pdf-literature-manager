@@ -16,8 +16,11 @@ Windows 一键 PDF 文献管理工具，面向论文、硕士/博士学位论文
 - 提供 Zotero 导出检查 / 待复核面板，可按 skipped、unknown、document、needs_review、缺 DOI、缺作者筛选并批量修正
 - 提供可选 AI 粗读 / 精读，支持 OpenAI-compatible API、可编辑模型名和 Base URL，API Key 仅从环境变量或本机临时输入读取
 - 提供批量粗读排序报告，帮助先筛选值得精读的论文；不会在批量排序中调用或消耗 API
+- 支持用户确认后的批量 AI 粗读生成，最多一次处理 8 条，避免误耗额度
 - 保存非敏感偏好配置：引用风格、递归扫描、联网补全、Obsidian 目录/模板、AI 模型名、Base URL 和环境变量名；不会保存 API Key
-- 提供 OCR 状态检测，便于判断中文扫描版 PDF 是否需要安装 tesseract、PaddleOCR 或 EasyOCR
+- 提供 OCR 状态检测，并在扫描版 PDF 无可提取文本时尝试调用 tesseract OCR 兜底
+- Zotero local API 支持去重、collection key 和 PDF 附件挂载；失败时仍回退到 RIS/BibTeX
+- CLI 提供真实 PDF 样本回归报告入口，便于持续检查识别准确率
 - 优化 GUI 信息架构：扫描区、整理/复核/导入工具组、右侧当前记录详情和下一步建议
 - DOI/arXiv 与题名、作者、年份、期刊/出版社补全后自动通过，可直接重命名和导出，无需逐条复核
 - CLI 重命名计划同样使用 GB/T 7714 安全文件名，并限制长度以适配 Windows 路径
@@ -52,6 +55,7 @@ PDF文献管理器.exe
 .\pdf-manager-cli.exe "D:\PDFs"
 .\pdf-manager-cli.exe "D:\PDFs" --style gbt7714 --no-network
 .\pdf-manager-cli.exe "D:\PDFs" --style ieee --recursive
+.\pdf-manager-cli.exe "D:\PDFs" --sample-regression "D:\pdf_samples"
 ```
 
 ## 输出文件
@@ -74,6 +78,7 @@ _pdf_manager_output/
 | `zotero_local_api_plan.json` | Zotero local API 不可用时的回退导入计划 |
 | `obsidian_notes/` | Obsidian 文献笔记 |
 | `ai_reading_notes/` | AI 粗读/精读 Markdown 笔记 |
+| `sample_regression_report.md/json` | 真实 PDF 样本识别回归报告 |
 | `import_guide.md` | 第三方软件导入说明 |
 | `duplicates.md` | 重复文献分组与合并标记 |
 | `rename_log.jsonl` / `rename_log.md` | 重命名与撤销记录 |

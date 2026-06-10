@@ -28,4 +28,10 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Generate rename_plan.md without renaming files",
     )
+    parser.add_argument(
+        "--sample-regression",
+        metavar="SAMPLES_DIR",
+        default=None,
+        help="Run recognition regression on a directory of sample PDFs and write a report",
+    )
     return parser.parse_args()

@@ -179,6 +179,70 @@ def write_batch_rough_report(out_dir: Path, rows: list[dict], model: str, base_u
     return path
 
 
+def generate_batch_readings(
+    *,
+    records: list[dict],
+    out_dir: Path,
+    mode: str,
+    model: str,
+    base_url: str,
+    api_key: str,
+    preference: str = "",
+    limit: int = 8,
+) -> list[dict]:
+    rows: list[dict] = []
+    for rec in records[: max(0, limit)]:
+        if rec.get("detected_type") not in {"paper", "thesis"} or rec.get("needs_review"):
+            rows.append(_batch_result(rec, "skipped", "", "not ready for AI reading"))
+            continue
+        pdf_path = Path(rec.get("absolute_path") or "")
+        if not pdf_path.exists():
+            rows.append(_batch_result(rec, "failed", "", "PDF path not found"))
+            continue
+        try:
+            note = generate_reading(
+                rec=rec,
+                pdf_path=pdf_path,
+                out_dir=out_dir,
+                mode=mode,
+                model=model,
+                base_url=base_url,
+                api_key=api_key,
+                preference=preference,
+            )
+            rows.append(_batch_result(rec, "generated", str(note), ""))
+        except Exception as exc:
+            rows.append(_batch_result(rec, "failed", "", str(exc)))
+    write_batch_ai_summary(out_dir, rows, mode, model, base_url)
+    return rows
+
+
+def write_batch_ai_summary(out_dir: Path, rows: list[dict], mode: str, model: str, base_url: str) -> Path:
+    notes_dir = out_dir / "ai_reading_notes"
+    notes_dir.mkdir(parents=True, exist_ok=True)
+    path = notes_dir / f"batch_ai_{mode}_summary.md"
+    lines = [
+        "---",
+        f"mode: {_yaml_scalar(mode)}",
+        f"model: {_yaml_scalar(model)}",
+        f"base_url: {_yaml_scalar(_redact_base_url(base_url))}",
+        f"created_at: {_yaml_scalar(datetime.now().isoformat(timespec='seconds'))}",
+        "---",
+        "",
+        f"# 批量 AI {('精读' if mode == 'deep' else '粗读')}结果",
+        "",
+        "| Status | File | Note | Error |",
+        "|---|---|---|---|",
+    ]
+    for row in rows:
+        lines.append(
+            f"| {_md_cell(row.get('status'))} | {_md_cell(row.get('file'))} | "
+            f"{_md_cell(row.get('note_path'))} | {_md_cell(row.get('error'))} |"
+        )
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
 def heuristic_batch_rows(records: list[dict]) -> list[dict]:
     rows = []
     for rec in records:
@@ -199,6 +263,16 @@ def heuristic_batch_rows(records: list[dict]) -> list[dict]:
         })
     order = {"高": 0, "中": 1, "低": 2}
     return sorted(rows, key=lambda r: order.get(r["priority"], 9))
+
+
+def _batch_result(rec: dict, status: str, note_path: str, error: str) -> dict:
+    return {
+        "status": status,
+        "file": rec.get("original_filename") or "",
+        "title": rec.get("title") or rec.get("tag") or "",
+        "note_path": note_path,
+        "error": error,
+    }
 
 
 def resolve_api_key(env_name: str, temporary_key: str = "") -> str:

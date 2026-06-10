@@ -8,7 +8,7 @@ import sys
 import threading
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 
 
 APP_TITLE = "PDF 文献管理器"
@@ -45,18 +45,21 @@ COL_WIDTHS = {
 }
 
 PALETTE = {
-    "app": "#eef2f6",
+    "app": "#f3f6fb",
     "surface": "#ffffff",
-    "surface_alt": "#f7f9fc",
-    "line": "#d9e2ec",
-    "ink": "#182230",
-    "muted": "#667085",
-    "primary": "#2563eb",
-    "primary_dark": "#1d4ed8",
+    "surface_alt": "#f8fafc",
+    "line": "#d7dee8",
+    "ink": "#172033",
+    "muted": "#64748b",
+    "primary": "#1f6feb",
+    "primary_dark": "#1557c0",
     "accent": "#0f766e",
     "danger": "#b42318",
-    "hero": "#102033",
-    "hero_2": "#18324f",
+    "hero": "#111827",
+    "hero_2": "#243042",
+    "soft_blue": "#eaf2ff",
+    "soft_green": "#e8f7f1",
+    "soft_orange": "#fff4df",
 }
 
 
@@ -840,6 +843,7 @@ class App(tk.Tk):
         style.configure("TFrame", background=PALETTE["app"])
         style.configure("Surface.TFrame", background=PALETTE["surface"])
         style.configure("Subtle.TFrame", background=PALETTE["surface_alt"])
+        style.configure("Group.TFrame", background=PALETTE["surface_alt"])
         style.configure("Dialog.TFrame", background=PALETTE["surface"])
         style.configure("Hero.TFrame", background=PALETTE["hero"])
         style.configure("HeroTitle.TLabel", background=PALETTE["hero"], foreground="#ffffff",
@@ -851,6 +855,8 @@ class App(tk.Tk):
                         font=("Microsoft YaHei UI", 10, "bold"))
         style.configure("Muted.TLabel", background=PALETTE["surface"], foreground=PALETTE["muted"])
         style.configure("SubtleMuted.TLabel", background=PALETTE["surface_alt"], foreground=PALETTE["muted"])
+        style.configure("Group.TLabel", background=PALETTE["surface_alt"], foreground=PALETTE["muted"],
+                        font=("Microsoft YaHei UI", 8, "bold"))
         style.configure("DialogTitle.TLabel", background=PALETTE["surface"], foreground=PALETTE["ink"],
                         font=("Microsoft YaHei UI", 14, "bold"))
         style.configure("DialogLabel.TLabel", background=PALETTE["surface"], foreground=PALETTE["ink"])
@@ -933,8 +939,14 @@ class App(tk.Tk):
         self._ai_model_var = tk.StringVar(value="gpt-5.4")
         self._ai_base_url_var = tk.StringVar(value="https://api.openai.com/v1")
         self._ai_env_var = tk.StringVar(value="OPENAI_API_KEY")
+        self._ocr_var = tk.BooleanVar(value=True)
+        self._ocr_lang_var = tk.StringVar(value="chi_sim+eng")
+        self._zotero_collection_var = tk.StringVar(value="")
+        self._zotero_attach_var = tk.BooleanVar(value=True)
+        self._zotero_dedupe_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(options, text="递归子目录", variable=self._recursive_var).pack(side=tk.LEFT)
         ttk.Checkbutton(options, text="联网补全 DOI / arXiv", variable=self._network_var).pack(side=tk.LEFT, padx=(18, 0))
+        ttk.Checkbutton(options, text="OCR 兜底", variable=self._ocr_var).pack(side=tk.LEFT, padx=(18, 0))
         ttk.Checkbutton(options, text="生成 Obsidian 文献笔记", variable=self._obsidian_var).pack(side=tk.LEFT, padx=(18, 0))
         ttk.Label(options, text="引用风格", style="Muted.TLabel").pack(side=tk.LEFT, padx=(18, 6))
         ttk.Combobox(options, textvariable=self._style_var, values=list(STYLE_OPTIONS), state="readonly", width=12).pack(side=tk.LEFT)
@@ -959,8 +971,18 @@ class App(tk.Tk):
         ttk.Label(ai_opts, text="Env", style="Muted.TLabel").grid(row=0, column=4, sticky="w")
         ttk.Entry(ai_opts, textvariable=self._ai_env_var, width=16).grid(row=0, column=5, sticky="e", padx=(6, 0))
 
+        zotero_opts = ttk.Frame(shell, style="Surface.TFrame")
+        zotero_opts.grid(row=5, column=0, columnspan=4, sticky="ew", pady=(10, 0))
+        zotero_opts.columnconfigure(1, weight=1)
+        ttk.Label(zotero_opts, text="Zotero Collection", style="Muted.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Entry(zotero_opts, textvariable=self._zotero_collection_var).grid(row=0, column=1, sticky="ew", padx=(6, 18))
+        ttk.Checkbutton(zotero_opts, text="去重", variable=self._zotero_dedupe_var).grid(row=0, column=2, sticky="w", padx=(0, 12))
+        ttk.Checkbutton(zotero_opts, text="挂载 PDF 附件", variable=self._zotero_attach_var).grid(row=0, column=3, sticky="w", padx=(0, 18))
+        ttk.Label(zotero_opts, text="OCR 语言", style="Muted.TLabel").grid(row=0, column=4, sticky="w")
+        ttk.Entry(zotero_opts, textvariable=self._ocr_lang_var, width=12).grid(row=0, column=5, sticky="e", padx=(6, 0))
+
         self._progress = ttk.Progressbar(shell, mode="determinate")
-        self._progress.grid(row=5, column=0, columnspan=4, sticky="ew", pady=(12, 0))
+        self._progress.grid(row=6, column=0, columnspan=4, sticky="ew", pady=(12, 0))
 
     def _build_table(self):
         body = ttk.Frame(self, style="Surface.TFrame", padding=(14, 12))
@@ -1008,6 +1030,7 @@ class App(tk.Tk):
             ("AI", [
                 ("AI 阅读", self._open_ai_reading_dialog, "Accent.TButton"),
                 ("批量粗读", self._batch_ai_rough, "Accent.TButton"),
+                ("批量 AI", self._batch_ai_generate, "Toolbutton.TButton"),
                 ("OCR 状态", self._show_ocr_status, "Toolbutton.TButton"),
             ]),
             ("导入", [
@@ -1050,8 +1073,8 @@ class App(tk.Tk):
         self._build_detail_panel(body)
 
     def _button_group(self, master, label: str, buttons: list[tuple[str, object, str]]) -> ttk.Frame:
-        group = ttk.Frame(master, style="Surface.TFrame")
-        ttk.Label(group, text=label, style="Muted.TLabel").pack(side=tk.LEFT, padx=(0, 6))
+        group = ttk.Frame(master, style="Group.TFrame", padding=(8, 6))
+        ttk.Label(group, text=label, style="Group.TLabel").pack(side=tk.LEFT, padx=(0, 8))
         for text, command, btn_style in buttons:
             ttk.Button(group, text=text, style=btn_style, command=command).pack(side=tk.LEFT, padx=(0, 5))
         return group
@@ -1061,28 +1084,30 @@ class App(tk.Tk):
         panel.grid(row=0, column=1, rowspan=3, sticky="nsew", padx=(12, 0))
         panel.columnconfigure(0, weight=1)
         ttk.Label(panel, text="当前记录", style="PanelTitle.TLabel").grid(row=0, column=0, sticky="w")
+        self._detail_status_canvas = tk.Canvas(panel, width=235, height=5, bg=PALETTE["surface_alt"], bd=0, highlightthickness=0)
+        self._detail_status_canvas.grid(row=1, column=0, sticky="ew", pady=(10, 0))
         self._detail_title_var = tk.StringVar(value="尚未选择")
         self._detail_meta_var = tk.StringVar(value="选择一条记录后查看作者、DOI、复核原因。")
         self._detail_hint_var = tk.StringVar(value="建议流程：扫描 -> 批量复核 -> 导出 Zotero / Obsidian。")
         ttk.Label(panel, textvariable=self._detail_title_var, style="PanelTitle.TLabel", wraplength=235).grid(
-            row=1, column=0, sticky="ew", pady=(14, 6)
+            row=2, column=0, sticky="ew", pady=(14, 6)
         )
         ttk.Label(panel, textvariable=self._detail_meta_var, style="SubtleMuted.TLabel", wraplength=235).grid(
-            row=2, column=0, sticky="ew"
+            row=3, column=0, sticky="ew"
         )
-        ttk.Separator(panel).grid(row=3, column=0, sticky="ew", pady=12)
-        ttk.Label(panel, text="常用下一步", style="PanelTitle.TLabel").grid(row=4, column=0, sticky="w")
+        ttk.Separator(panel).grid(row=4, column=0, sticky="ew", pady=12)
+        ttk.Label(panel, text="常用下一步", style="PanelTitle.TLabel").grid(row=5, column=0, sticky="w")
         ttk.Button(panel, text="复核编辑", style="Accent.TButton", command=self._open_review_dialog).grid(
-            row=5, column=0, sticky="ew", pady=(8, 4)
+            row=6, column=0, sticky="ew", pady=(8, 4)
         )
         ttk.Button(panel, text="AI 粗读 / 精读", style="Accent.TButton", command=self._open_ai_reading_dialog).grid(
-            row=6, column=0, sticky="ew", pady=4
-        )
-        ttk.Button(panel, text="Zotero 导出检查", command=self._open_zotero_review_dialog).grid(
             row=7, column=0, sticky="ew", pady=4
         )
+        ttk.Button(panel, text="Zotero 导出检查", command=self._open_zotero_review_dialog).grid(
+            row=8, column=0, sticky="ew", pady=4
+        )
         ttk.Label(panel, textvariable=self._detail_hint_var, style="SubtleMuted.TLabel", wraplength=235).grid(
-            row=8, column=0, sticky="ew", pady=(14, 0)
+            row=9, column=0, sticky="ew", pady=(14, 0)
         )
 
     def _build_footer(self):
@@ -1118,6 +1143,11 @@ class App(tk.Tk):
         self._ai_model_var.set(self._prefs.get("ai_model") or self._ai_model_var.get())
         self._ai_base_url_var.set(self._prefs.get("ai_base_url") or self._ai_base_url_var.get())
         self._ai_env_var.set(self._prefs.get("ai_env_name") or self._ai_env_var.get())
+        self._ocr_var.set(bool(self._prefs.get("enable_ocr", self._ocr_var.get())))
+        self._ocr_lang_var.set(self._prefs.get("ocr_lang") or self._ocr_lang_var.get())
+        self._zotero_collection_var.set(self._prefs.get("zotero_collection_key") or "")
+        self._zotero_attach_var.set(bool(self._prefs.get("zotero_attach_pdf", self._zotero_attach_var.get())))
+        self._zotero_dedupe_var.set(bool(self._prefs.get("zotero_dedupe", self._zotero_dedupe_var.get())))
 
     def _save_preferences(self):
         try:
@@ -1133,6 +1163,11 @@ class App(tk.Tk):
                 "ai_model": self._ai_model_var.get().strip() or "gpt-5.4",
                 "ai_base_url": self._ai_base_url_var.get().strip() or "https://api.openai.com/v1",
                 "ai_env_name": self._ai_env_var.get().strip() or "OPENAI_API_KEY",
+                "enable_ocr": self._ocr_var.get(),
+                "ocr_lang": self._ocr_lang_var.get().strip() or "chi_sim+eng",
+                "zotero_collection_key": self._zotero_collection_var.get().strip(),
+                "zotero_attach_pdf": self._zotero_attach_var.get(),
+                "zotero_dedupe": self._zotero_dedupe_var.get(),
             })
         except Exception:
             pass
@@ -1157,6 +1192,11 @@ class App(tk.Tk):
             "obsidian_links": ["trajectory_optimization_kb", "02_literature"],
             "obsidian_literature_dir": self._obsidian_dir_var.get().strip() or "02_literature",
             "obsidian_note_template": self._obsidian_template_var.get().strip(),
+            "enable_ocr": self._ocr_var.get(),
+            "ocr_lang": self._ocr_lang_var.get().strip() or "chi_sim+eng",
+            "zotero_collection_key": self._zotero_collection_var.get().strip(),
+            "zotero_attach_pdf": self._zotero_attach_var.get(),
+            "zotero_dedupe": self._zotero_dedupe_var.get(),
         }
 
     def _browse_obsidian_template(self):
@@ -1195,10 +1235,12 @@ class App(tk.Tk):
             path: Path = file_info["path"]
             rec = self._base_record(path, scan_dir, file_info)
             try:
-                ext = extractor.extract(path)
+                ext = extractor.extract(path, cfg)
                 rec["page_count"] = ext.get("page_count", 0)
                 rec["doi"] = ext.get("doi")
                 rec["arxiv_id"] = ext.get("arxiv_id")
+                rec["ocr_engine"] = ext.get("ocr_engine")
+                rec["ocr_error"] = ext.get("ocr_error")
                 rec["needs_review"] = ext.get("needs_review", False)
                 cls = classifier.classify(ext, cfg)
                 rec["detected_type"] = cls["detected_type"]
@@ -1267,6 +1309,8 @@ class App(tk.Tk):
             "thesis_type": None,
             "notes": None,
             "error": None,
+            "ocr_engine": None,
+            "ocr_error": None,
             "_bibtex_entry": None,
             "_suggested_name": None,
         }
@@ -1349,6 +1393,7 @@ class App(tk.Tk):
         self._detail_title_var.set("尚未选择")
         self._detail_meta_var.set("选择一条记录后查看作者、DOI、复核原因。")
         self._detail_hint_var.set("建议流程：扫描 -> 批量复核 -> 导出 Zotero / Obsidian。")
+        self._paint_detail_status(None)
 
     def _on_click_select(self, event):
         if self._tree.identify_region(event.x, event.y) != "cell" or self._tree.identify_column(event.x) != "#1":
@@ -1481,6 +1526,48 @@ class App(tk.Tk):
         except Exception:
             messagebox.showinfo("批量粗读完成", f"已生成：\n{report}")
 
+    def _batch_ai_generate(self):
+        rows = self._selected_rows()
+        records = [rec for _item, rec, _values in rows] if rows else [
+            rec for rec in self._records if rec.get("detected_type") in {"paper", "thesis"} and not rec.get("needs_review")
+        ]
+        records = records[:8]
+        if not records:
+            messagebox.showinfo("没有可生成记录", "请先勾选已通过复核的 paper/thesis。")
+            return
+        scan_dir = self._dir_var.get().strip()
+        if not scan_dir:
+            messagebox.showinfo("未选择文件夹", "请先选择扫描文件夹。")
+            return
+        if not messagebox.askyesno(
+            "确认批量调用 AI",
+            f"即将为 {len(records)} 条记录调用模型生成粗读笔记，可能消耗 API 额度。\nAPI Key 不会保存。是否继续？",
+        ):
+            return
+        temporary_key = simpledialog.askstring("临时 API Key", "可留空读取环境变量；填写内容仅本次内存使用：", show="*")
+        try:
+            from pdf_manager import ai_reading
+
+            api_key = ai_reading.resolve_api_key(self._ai_env_var.get(), temporary_key or "")
+            out = Path(scan_dir) / OUTPUT_DIR_NAME
+            self._status_var.set("正在批量生成 AI 粗读笔记...")
+            result_rows = ai_reading.generate_batch_readings(
+                records=records,
+                out_dir=out,
+                mode="rough",
+                model=self._ai_model_var.get().strip() or ai_reading.DEFAULT_MODEL,
+                base_url=self._ai_base_url_var.get().strip() or ai_reading.DEFAULT_BASE_URL,
+                api_key=api_key,
+                preference="航天动力学、小推力轨迹优化、最优控制、RTBP、ADRC；优先判断是否值得精读和引用。",
+                limit=len(records),
+            )
+            done = sum(1 for row in result_rows if row.get("status") == "generated")
+            self._last_output = out
+            self._status_var.set(f"批量 AI 完成：生成 {done}/{len(result_rows)} 条")
+            os.startfile(str(out / "ai_reading_notes"))
+        except Exception as exc:
+            messagebox.showerror("批量 AI 失败", _format_ai_error(exc))
+
     def _load_session(self):
         scan_dir = self._dir_var.get().strip()
         default = Path(scan_dir) / OUTPUT_DIR_NAME / "session.json" if scan_dir else None
@@ -1590,12 +1677,24 @@ class App(tk.Tk):
         try:
             from pdf_manager import zotero_api
 
-            report = zotero_api.import_records(out, self._records)
+            cfg = self._cfg()
+            report = zotero_api.import_records(
+                out,
+                self._records,
+                collection_key=cfg.get("zotero_collection_key", ""),
+                attach_pdf=bool(cfg.get("zotero_attach_pdf", True)),
+                dedupe=bool(cfg.get("zotero_dedupe", True)),
+            )
             data = json.loads(report.read_text(encoding="utf-8"))
             if data.get("status") == "imported":
                 messagebox.showinfo(
                     "Zotero API",
-                    f"已通过 Zotero local API 导入 {data.get('created', 0)}/{data.get('attempted', 0)} 条。\n报告：\n{report}",
+                    f"已通过 Zotero local API 导入 {data.get('created', 0)} 条，复用 {data.get('existing', 0)} 条，附件 {data.get('attached', 0)} 个。\n报告：\n{report}",
+                )
+            elif data.get("status") == "deduped":
+                messagebox.showinfo(
+                    "Zotero API",
+                    f"未创建新条目；已复用 {data.get('existing', 0)} 条，附件 {data.get('attached', 0)} 个。\n报告：\n{report}",
                 )
             else:
                 plan = zotero_api.import_report_placeholder(out, self._records)
@@ -1777,6 +1876,7 @@ class App(tk.Tk):
         if not selected:
             return
         _item, rec = selected
+        self._paint_detail_status(rec)
         authors = _authors_to_text(rec.get("authors")) or "未知作者"
         identity = rec.get("doi") or rec.get("arxiv_id") or "无 DOI / arXiv"
         review = "需要人工复核" if rec.get("needs_review") else "无需复核"
@@ -1804,6 +1904,25 @@ class App(tk.Tk):
         else:
             hint = "普通 PDF 默认不进入 Zotero；可改为 paper/thesis 后重新导出。"
         self._detail_hint_var.set(hint[:220])
+
+    def _paint_detail_status(self, rec: dict | None):
+        canvas = getattr(self, "_detail_status_canvas", None)
+        if not canvas:
+            return
+        canvas.delete("all")
+        if not rec:
+            color = PALETTE["line"]
+        elif rec.get("error"):
+            color = "#f04438"
+        elif rec.get("needs_review") or rec.get("detected_type") == "unknown":
+            color = "#f59e0b"
+        elif rec.get("detected_type") == "thesis":
+            color = "#1f6feb"
+        elif rec.get("detected_type") == "paper":
+            color = "#12b76a"
+        else:
+            color = "#94a3b8"
+        canvas.create_rectangle(0, 0, 260, 5, fill=color, outline="")
 
     def _update_summary(self):
         total = len(self._records)
