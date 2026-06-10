@@ -4,7 +4,7 @@ from pathlib import Path
 
 from pdf_manager.cli import parse_args
 from pdf_manager.config import load_config
-from pdf_manager import scanner, extractor, classifier, metadata, citation, bibtex, writers
+from pdf_manager import scanner, extractor, classifier, metadata, citation, bibtex, record_utils, writers
 
 
 def _exe_dir() -> str:
@@ -95,6 +95,7 @@ def main():
                     rec[k] = meta[k]
             if meta.get("summary"):
                 rec["notes"] = meta["summary"]
+            record_utils.auto_accept_literature(rec)
 
             if rec["detected_type"] in {"paper", "thesis"}:
                 rec["ieee_citation"] = citation.generate(rec, "ieee")

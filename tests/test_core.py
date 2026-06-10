@@ -102,6 +102,27 @@ def test_structured_doi_article_classifies_as_paper():
     assert result["confidence"] == 0.7
 
 
+def test_complete_doi_metadata_auto_accepts_unknown_paper():
+    from pdf_manager import record_utils
+
+    rec = {
+        "detected_type": "unknown",
+        "confidence": 0.5,
+        "needs_review": True,
+        "classification_reason": "DOI detected; Introduction section found; Publisher keyword found",
+        "doi": "10.1109/TAES.2025.3575552",
+        "title": "Adaptive Control for Test Mass Capture and Drag-Free Mode",
+        "authors": ["Yankai Wang", "Yingjie Chen"],
+        "year": "2025",
+        "venue": "IEEE Transactions on Aerospace and Electronic Systems",
+    }
+    assert record_utils.auto_accept_literature(rec) is True
+    assert rec["detected_type"] == "paper"
+    assert rec["needs_review"] is False
+    assert rec["confidence"] >= 0.82
+    assert "auto accepted" in rec["classification_reason"]
+
+
 def test_thesis_classification_and_gbt_citation():
     from pdf_manager import classifier
 

@@ -88,11 +88,21 @@ def _suggest_name(rec: dict) -> str:
 def _status_label(rec: dict) -> str:
     if rec.get("error"):
         return "失败"
-    if rec.get("needs_review") or rec.get("detected_type") == "unknown":
-        return "待复核"
-    return {"paper": "期刊论文", "thesis": "学位论文", "document": "普通 PDF"}.get(
+    label = {"paper": "论文", "thesis": "学位论文", "document": "普通 PDF", "unknown": "待复核"}.get(
         rec.get("detected_type"), rec.get("detected_type") or ""
     )
+    if rec.get("needs_review") and rec.get("detected_type") in {"paper", "thesis"}:
+        return f"{label} / 需复核"
+    return label
+
+
+def _format_ai_error(exc: Exception) -> str:
+    text = str(exc)
+    if "Connection aborted" in text or "ConnectionResetError" in text or "10054" in text:
+        return "AI 连接被远端关闭。请检查 Base URL、模型名、网络代理，或稍后重试。"
+    if "API key is missing" in text:
+        return "未找到 API Key。请填写临时 API Key，或确认环境变量名是否正确。"
+    return text
 
 
 def _authors_to_text(authors) -> str:
@@ -709,7 +719,7 @@ class AIReadingDialog(tk.Toplevel):
         self._busy = False
         self._run_btn.configure(state=tk.NORMAL)
         if exc:
-            messagebox.showerror("AI 阅读失败", str(exc))
+            messagebox.showerror("AI 阅读失败", _format_ai_error(exc))
             self._status_var.set("生成失败。请检查 API Key、Base URL、模型名和网络。")
             return
         self._result_path = result
@@ -1116,7 +1126,7 @@ class App(tk.Tk):
         self.after(80, lambda: self._poll_queue(token))
 
     def _scan_worker(self, scan_dir: str, cfg: dict, token: int):
-        from pdf_manager import bibtex, citation, classifier, extractor, metadata, scanner
+        from pdf_manager import bibtex, citation, classifier, extractor, metadata, record_utils, scanner
 
         bibtex.reset_keys()
         files = scanner.scan(scan_dir, cfg.get("recursive", False))
@@ -1142,6 +1152,7 @@ class App(tk.Tk):
                         rec[key] = meta[key]
                 if meta.get("summary"):
                     rec["notes"] = meta["summary"]
+                record_utils.auto_accept_literature(rec)
                 if rec["detected_type"] in {"paper", "thesis"}:
                     rec["ieee_citation"] = citation.generate(rec, "ieee")
                     rec["citation"] = citation.generate(rec, cfg.get("citation_style", "gbt7714"))
